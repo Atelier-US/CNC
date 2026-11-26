@@ -1,0 +1,2582 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistant Atelier CNC — Usinage & Métrologie</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        atelier: {
+                            bg: '#0f131a',
+                            panel: '#181e29',
+                            card: '#202837',
+                            border: '#2e3a4e',
+                            orange: '#f97316',
+                            orangeHover: '#ea580c',
+                            blue: '#38bdf8',
+                            steel: '#64748b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Suppression des flèches natives des inputs numériques pour un look épuré */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        /* Scrollbar personnalisée discrète */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f131a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2e3a4e;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #f97316;
+        }
+    </style>
+</head>
+<body class="bg-atelier-bg text-slate-100 font-sans antialiased min-h-screen flex flex-col selection:bg-atelier-orange selection:text-white">
+
+    <!-- En-tête compact style Pupitre CNC -->
+    <header class="bg-atelier-panel border-b border-atelier-border sticky top-0 z-30 shadow-lg">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-atelier-orange to-amber-600 flex items-center justify-center shadow-md shadow-orange-500/20">
+                    <!-- Icône Fraise / Engrenage SVG -->
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                        CNC <span class="text-atelier-orange">ATELIER</span> PRO
+                    </h1>
+                    <p class="text-xs text-slate-400 hidden sm:block">Calculs d'usinage, ISO 286-2 & Métrologie</p>
+                </div>
+            </div>
+
+            <!-- Indicateur état & Notification Toast intégrée -->
+            <div id="toast-box" class="hidden items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <span id="toast-msg">Copié !</span>
+            </div>
+        </div>
+
+        <!-- Barre de navigation par onglets tactiles -->
+        <nav class="max-w-7xl mx-auto px-2 sm:px-6 overflow-x-auto">
+            <div class="flex space-x-1 sm:space-x-2 pb-2" role="tablist">
+                <button onclick="switchTab('fraisage')" id="tab-fraisage" class="tab-btn active flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all bg-atelier-orange text-white shadow-md shadow-orange-500/20">
+                    <span>1. Fraisage</span>
+                </button>
+                <button onclick="switchTab('tournage')" id="tab-tournage" class="tab-btn flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all bg-atelier-card text-slate-300 hover:bg-slate-700 hover:text-white border border-atelier-border">
+                    <span>2. Tournage</span>
+                </button>
+                <button onclick="switchTab('iso')" id="tab-iso" class="tab-btn flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all bg-atelier-card text-slate-300 hover:bg-slate-700 hover:text-white border border-atelier-border">
+                    <span>3. Tolérances ISO</span>
+                </button>
+                <button onclick="switchTab('pcd')" id="tab-pcd" class="tab-btn flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all bg-atelier-card text-slate-300 hover:bg-slate-700 hover:text-white border border-atelier-border">
+                    <span>4. Trous sur PCD</span>
+                </button>
+                <button onclick="switchTab('localisation')" id="tab-localisation" class="tab-btn flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all bg-atelier-card text-slate-300 hover:bg-slate-700 hover:text-white border border-atelier-border">
+                    <span>5. Localisation (Palpage)</span>
+                </button>
+                <button onclick="switchTab('trigo')" id="tab-trigo" class="tab-btn flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all bg-atelier-card text-slate-300 hover:bg-slate-700 hover:text-white border border-atelier-border">
+                    <span>6. Trigo & Chanfrein</span>
+                </button>
+                <button onclick="switchTab('mmt')" id="tab-mmt" class="tab-btn flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all bg-atelier-card text-slate-300 hover:bg-slate-700 hover:text-white border border-atelier-border">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span>7. Relevé Multi-Trous & Archives</span>
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Conteneur Principal -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-5">
+
+        <!-- ===================================================================== -->
+        <!-- ONGLET 1 : FRAISAGE                                                   -->
+        <!-- ===================================================================== -->
+        <section id="panel-fraisage" class="tab-panel space-y-5">
+            <!-- Mémo Rapide Matières -->
+            <div class="bg-atelier-panel border border-atelier-border rounded-xl p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Pré-réglages rapides matière (Fraise Carbure Revêtue)</span>
+                    <button onclick="resetFraisage()" class="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 transition">Réinitialiser</button>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    <button onclick="applyPresetFraisage(160, 0.08, 'Acier')" class="p-2.5 rounded-lg bg-atelier-card hover:border-atelier-orange border border-atelier-border text-left transition group">
+                        <div class="text-xs font-bold text-sky-400 group-hover:text-atelier-orange">Acier (C45 / 42CD4)</div>
+                        <div class="text-[11px] font-mono text-slate-400">Vc: 160 m/min | fz: 0.08</div>
+                    </button>
+                    <button onclick="applyPresetFraisage(95, 0.06, 'Inox')" class="p-2.5 rounded-lg bg-atelier-card hover:border-atelier-orange border border-atelier-border text-left transition group">
+                        <div class="text-xs font-bold text-amber-400 group-hover:text-atelier-orange">Inox (304L / 316L)</div>
+                        <div class="text-[11px] font-mono text-slate-400">Vc: 95 m/min | fz: 0.06</div>
+                    </button>
+                    <button onclick="applyPresetFraisage(450, 0.12, 'Alu')" class="p-2.5 rounded-lg bg-atelier-card hover:border-atelier-orange border border-atelier-border text-left transition group">
+                        <div class="text-xs font-bold text-emerald-400 group-hover:text-atelier-orange">Aluminium (2017 / 7075)</div>
+                        <div class="text-[11px] font-mono text-slate-400">Vc: 450 m/min | fz: 0.12</div>
+                    </button>
+                    <button onclick="applyPresetFraisage(140, 0.10, 'Fonte')" class="p-2.5 rounded-lg bg-atelier-card hover:border-atelier-orange border border-atelier-border text-left transition group">
+                        <div class="text-xs font-bold text-purple-400 group-hover:text-atelier-orange">Fonte (FGL / FGS)</div>
+                        <div class="text-[11px] font-mono text-slate-400">Vc: 140 m/min | fz: 0.10</div>
+                    </button>
+                    <button onclick="applyPresetFraisage(45, 0.05, 'Titane')" class="col-span-2 sm:col-span-1 p-2.5 rounded-lg bg-atelier-card hover:border-atelier-orange border border-atelier-border text-left transition group">
+                        <div class="text-xs font-bold text-rose-400 group-hover:text-atelier-orange">Titane (TA6V / Gr. 5)</div>
+                        <div class="text-[11px] font-mono text-slate-400">Vc: 45 m/min | fz: 0.05</div>
+                    </button>
+                </div>
+                <!-- Mémo atelier spécifique Titane (affiché lors de la sélection) -->
+                <div id="fr-titane-note" class="hidden mt-3 p-3 rounded-lg bg-rose-500/10 border border-rose-500/40 text-xs text-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <span class="font-bold text-rose-400 uppercase">Mémo Titane TA6V (Ti-6Al-4V) :</span>
+                        Arrosage haute pression indispensable, aucun arrêt dans la coupe (écrouissage), outil carbure revêtu <span class="font-mono font-bold text-white">AlTiN / TiAlN</span>. Passes conseillées : <span class="font-mono text-amber-300">ap ≤ 0.5×D</span> | <span class="font-mono text-amber-300">ae ≤ 0.2×D</span>.
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <!-- Entrées Fraisage -->
+                <div class="lg:col-span-6 bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                    <h2 class="text-base font-bold text-white border-b border-atelier-border pb-2 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-atelier-orange"></span> Paramètres Outil & Coupe
+                    </h2>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Diamètre fraise D (mm)</label>
+                            <input type="number" id="fr-d" value="16" step="0.1" min="0.1" oninput="calcFraisage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2.5 text-lg font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre de dents Z</label>
+                            <input type="number" id="fr-z" value="4" step="1" min="1" oninput="calcFraisage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2.5 text-lg font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Vitesse de coupe Vc (m/min)</label>
+                            <input type="number" id="fr-vc" value="160" step="1" min="1" oninput="calcFraisage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2.5 text-lg font-mono font-bold text-sky-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Avance à la dent fz (mm/dent)</label>
+                            <input type="number" id="fr-fz" value="0.08" step="0.005" min="0.001" oninput="calcFraisage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2.5 text-lg font-mono font-bold text-sky-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-400 mb-1">Engagement radial ae (mm) <span class="text-[10px]">(optionnel)</span></label>
+                            <input type="number" id="fr-ae" value="8" step="0.1" min="0" oninput="calcFraisage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2 text-base font-mono text-slate-200 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-400 mb-1">Profondeur passe ap (mm) <span class="text-[10px]">(optionnel)</span></label>
+                            <input type="number" id="fr-ap" value="10" step="0.1" min="0" oninput="calcFraisage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2 text-base font-mono text-slate-200 outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Résultats Fraisage -->
+                <div class="lg:col-span-6 bg-atelier-panel border border-atelier-border rounded-xl p-5 flex flex-col justify-between space-y-4">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-atelier-border pb-2 mb-4">
+                            <h2 class="text-base font-bold text-white flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Résultats Pupitre CNC
+                            </h2>
+                            <button onclick="roundFraisage()" class="text-xs px-3 py-1.5 rounded-lg bg-atelier-card hover:bg-slate-700 text-amber-400 border border-amber-500/40 font-semibold transition">
+                                Arrondir atelier
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                                <div class="text-xs font-semibold text-slate-400 uppercase">Fréquence de rotation (N)</div>
+                                <div class="mt-1 flex items-baseline gap-2">
+                                    <span id="res-fr-n" class="text-3xl sm:text-4xl font-mono font-extrabold text-atelier-orange">3183</span>
+                                    <span class="text-sm font-semibold text-slate-400">tr/min</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                                <div class="text-xs font-semibold text-slate-400 uppercase">Avance travail (Vf)</div>
+                                <div class="mt-1 flex items-baseline gap-2">
+                                    <span id="res-fr-vf" class="text-3xl sm:text-4xl font-mono font-extrabold text-sky-400">1019</span>
+                                    <span class="text-sm font-semibold text-slate-400">mm/min</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                                <div class="text-xs font-semibold text-slate-400 uppercase">Avance par tour (f)</div>
+                                <div class="mt-1 flex items-baseline gap-2">
+                                    <span id="res-fr-f" class="text-2xl font-mono font-bold text-white">0.320</span>
+                                    <span class="text-sm font-semibold text-slate-400">mm/tr</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                                <div class="text-xs font-semibold text-slate-400 uppercase">Débit copeaux (Q)</div>
+                                <div class="mt-1 flex items-baseline gap-2">
+                                    <span id="res-fr-q" class="text-2xl font-mono font-bold text-emerald-400">81.5</span>
+                                    <span class="text-sm font-semibold text-slate-400">cm³/min</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-atelier-bg border border-atelier-border rounded-lg p-3 flex items-center justify-between">
+                        <code id="fr-gcode" class="font-mono text-sm text-amber-300">S3183 M03 F1019</code>
+                        <button onclick="copyText(document.getElementById('fr-gcode').innerText)" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-600 transition">
+                            Copier
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- ONGLET 2 : TOURNAGE                                                   -->
+        <!-- ===================================================================== -->
+        <section id="panel-tournage" class="tab-panel hidden space-y-5">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <!-- Entrées Tournage -->
+                <div class="lg:col-span-6 bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                    <div class="flex items-center justify-between border-b border-atelier-border pb-2">
+                        <h2 class="text-base font-bold text-white flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-atelier-orange"></span> Paramètres Tournage
+                        </h2>
+                        <button onclick="resetTournage()" class="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 transition">Réinitialiser</button>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Diamètre pièce D (mm)</label>
+                            <input type="number" id="tr-d" value="60" step="0.1" min="0.1" oninput="calcTournage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2.5 text-lg font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Vitesse de coupe Vc (m/min)</label>
+                            <input type="number" id="tr-vc" value="220" step="1" min="1" oninput="calcTournage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2.5 text-lg font-mono font-bold text-sky-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Avance par tour f (mm/tr)</label>
+                            <input type="number" id="tr-f" value="0.20" step="0.01" min="0.01" oninput="calcTournage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2.5 text-lg font-mono font-bold text-sky-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Profondeur passe ap (mm)</label>
+                            <input type="number" id="tr-ap" value="2.0" step="0.1" min="0.05" oninput="calcTournage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2.5 text-lg font-mono font-bold text-white outline-none">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Rayon de bec plaquette rε (mm) <span class="text-[10px] text-slate-400">(calcul rugosité Ra/Rt)</span></label>
+                            <select id="tr-re" onchange="calcTournage()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2.5 text-base font-mono font-bold text-amber-300 outline-none">
+                                <option value="0.2">0.2 mm (Super-finition)</option>
+                                <option value="0.4">0.4 mm (Finition)</option>
+                                <option value="0.8" selected>0.8 mm (Polyvalent / Demi-finition)</option>
+                                <option value="1.2">1.2 mm (Ébauche)</option>
+                                <option value="1.6">1.6 mm (Forte ébauche)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Résultats Tournage -->
+                <div class="lg:col-span-6 bg-atelier-panel border border-atelier-border rounded-xl p-5 flex flex-col justify-between space-y-4">
+                    <div>
+                        <h2 class="text-base font-bold text-white border-b border-atelier-border pb-2 mb-4 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Résultats Tournage & État de Surface
+                        </h2>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                                <div class="text-xs font-semibold text-slate-400 uppercase">Rotation à Ø D (N)</div>
+                                <div class="mt-1 flex items-baseline gap-2">
+                                    <span id="res-tr-n" class="text-3xl sm:text-4xl font-mono font-extrabold text-atelier-orange">1167</span>
+                                    <span class="text-sm font-semibold text-slate-400">tr/min</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                                <div class="text-xs font-semibold text-slate-400 uppercase">Vitesse avance (Vf)</div>
+                                <div class="mt-1 flex items-baseline gap-2">
+                                    <span id="res-tr-vf" class="text-3xl sm:text-4xl font-mono font-extrabold text-sky-400">233</span>
+                                    <span class="text-sm font-semibold text-slate-400">mm/min</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                                <div class="text-xs font-semibold text-slate-400 uppercase">Rugosité théorique (Ra)</div>
+                                <div class="mt-1 flex items-baseline gap-2">
+                                    <span id="res-tr-ra" class="text-2xl font-mono font-bold text-amber-400">1.56</span>
+                                    <span class="text-sm font-semibold text-slate-400">µm (Rt: <span id="res-tr-rt">6.25</span>)</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                                <div class="text-xs font-semibold text-slate-400 uppercase">Débit copeaux (Q)</div>
+                                <div class="mt-1 flex items-baseline gap-2">
+                                    <span id="res-tr-q" class="text-2xl font-mono font-bold text-emerald-400">88.0</span>
+                                    <span class="text-sm font-semibold text-slate-400">cm³/min</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-atelier-bg border border-atelier-border rounded-lg p-3 flex items-center justify-between">
+                        <code id="tr-gcode" class="font-mono text-sm text-amber-300">G96 S220 M03 / G95 F0.20</code>
+                        <button onclick="copyText(document.getElementById('tr-gcode').innerText)" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-600 transition">
+                            Copier
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- ONGLET 3 : TOLÉRANCES ISO 286-2 (ARBRES & ALÉSAGES + AJUSTEMENT)      -->
+        <!-- ===================================================================== -->
+        <section id="panel-iso" class="tab-panel hidden space-y-5">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <!-- Saisie ISO -->
+                <div class="lg:col-span-5 bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                    <h2 class="text-base font-bold text-white border-b border-atelier-border pb-2 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-atelier-orange"></span> Norme ISO 286-2 (1 à 500 mm)
+                    </h2>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Diamètre Nominal Ø (mm)</label>
+                        <input type="number" id="iso-dim" value="25" step="0.01" min="1" max="500" oninput="calcISO()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3.5 py-2.5 text-xl font-mono font-bold text-white outline-none">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Sélecteur Alésage -->
+                        <div>
+                            <label class="block text-xs font-semibold text-sky-400 mb-1">Alésage (MAJUSCULES)</label>
+                            <select id="iso-hole" onchange="calcISO()" class="w-full bg-atelier-bg border border-atelier-border focus:border-sky-400 rounded-lg px-3 py-2.5 text-lg font-mono font-bold text-sky-400 outline-none">
+                                <option value="H6">H6</option>
+                                <option value="H7" selected>H7</option>
+                                <option value="H8">H8</option>
+                                <option value="H9">H9</option>
+                                <option value="H11">H11</option>
+                                <option value="G6">G6</option>
+                                <option value="G7">G7</option>
+                                <option value="F7">F7</option>
+                                <option value="F8">F8</option>
+                                <option value="E8">E8</option>
+                                <option value="JS6">JS6</option>
+                                <option value="JS7">JS7</option>
+                                <option value="K6">K6</option>
+                                <option value="K7">K7</option>
+                                <option value="M6">M6</option>
+                                <option value="M7">M7</option>
+                                <option value="N6">N6</option>
+                                <option value="N7">N7</option>
+                                <option value="P6">P6</option>
+                                <option value="P7">P7</option>
+                            </select>
+                        </div>
+
+                        <!-- Sélecteur Arbre -->
+                        <div>
+                            <label class="block text-xs font-semibold text-atelier-orange mb-1">Arbre (minuscules)</label>
+                            <select id="iso-shaft" onchange="calcISO()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2.5 text-lg font-mono font-bold text-atelier-orange outline-none">
+                                <option value="h5">h5</option>
+                                <option value="h6">h6</option>
+                                <option value="h7">h7</option>
+                                <option value="h8">h8</option>
+                                <option value="h9">h9</option>
+                                <option value="h11">h11</option>
+                                <option value="g5">g5</option>
+                                <option value="g6" selected>g6</option>
+                                <option value="f6">f6</option>
+                                <option value="f7">f7</option>
+                                <option value="e7">e7</option>
+                                <option value="e8">e8</option>
+                                <option value="d9">d9</option>
+                                <option value="js5">js5</option>
+                                <option value="js6">js6</option>
+                                <option value="js7">js7</option>
+                                <option value="k5">k5</option>
+                                <option value="k6">k6</option>
+                                <option value="m5">m5</option>
+                                <option value="m6">m6</option>
+                                <option value="n6">n6</option>
+                                <option value="p6">p6</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="iso-warning" class="hidden p-3 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-semibold">
+                        Veuillez saisir un diamètre compris entre 1 et 500 mm.
+                    </div>
+
+                    <!-- Résumé Ajustement -->
+                    <div class="bg-atelier-card border border-atelier-border rounded-xl p-4 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase text-slate-400">Ajustement <span id="fit-label" class="text-white">Ø25 H7/g6</span></span>
+                            <span id="fit-type-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">JEU</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 pt-1 font-mono text-sm">
+                            <div>
+                                <span class="text-xs text-slate-400 block" id="fit-min-label">Jeu Mini</span>
+                                <span id="fit-min-val" class="text-base font-bold text-white">+0.007 mm</span>
+                            </div>
+                            <div>
+                                <span class="text-xs text-slate-400 block" id="fit-max-label">Jeu Maxi</span>
+                                <span id="fit-max-val" class="text-base font-bold text-white">+0.041 mm</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cartes détaillées Alésage & Arbre -->
+                <div class="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Carte Alésage -->
+                    <div class="bg-atelier-panel border border-sky-500/30 rounded-xl p-5 space-y-3">
+                        <div class="flex items-center justify-between border-b border-atelier-border pb-2">
+                            <h3 class="text-base font-bold text-sky-400">ALÉSAGE <span id="res-hole-code" class="font-mono">25 H7</span></h3>
+                            <span class="text-xs font-mono text-slate-400">IT: <span id="res-hole-it" class="text-white font-bold">21 µm</span></span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 text-sm font-mono bg-atelier-bg p-3 rounded-lg border border-atelier-border">
+                            <div>
+                                <span class="text-[11px] text-slate-400 block">Écart Sup (ES)</span>
+                                <span id="res-hole-es" class="font-bold text-sky-300">+0.021 mm</span>
+                            </div>
+                            <div>
+                                <span class="text-[11px] text-slate-400 block">Écart Inf (EI)</span>
+                                <span id="res-hole-ei" class="font-bold text-sky-300">0.000 mm</span>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2 font-mono">
+                            <div class="flex justify-between items-center bg-atelier-card px-3 py-2 rounded-lg">
+                                <span class="text-xs text-slate-400">Cote Maxi</span>
+                                <span id="res-hole-max" class="text-base font-bold text-white">25.021 mm</span>
+                            </div>
+                            <div class="flex justify-between items-center bg-atelier-card px-3 py-2 rounded-lg border border-sky-500/40">
+                                <span class="text-xs text-sky-300 font-bold">Cote Moyenne (CNC)</span>
+                                <span id="res-hole-mid" class="text-lg font-extrabold text-sky-400">25.0105 mm</span>
+                            </div>
+                            <div class="flex justify-between items-center bg-atelier-card px-3 py-2 rounded-lg">
+                                <span class="text-xs text-slate-400">Cote Mini</span>
+                                <span id="res-hole-min" class="text-base font-bold text-white">25.000 mm</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Carte Arbre -->
+                    <div class="bg-atelier-panel border border-orange-500/30 rounded-xl p-5 space-y-3">
+                        <div class="flex items-center justify-between border-b border-atelier-border pb-2">
+                            <h3 class="text-base font-bold text-atelier-orange">ARBRE <span id="res-shaft-code" class="font-mono">25 g6</span></h3>
+                            <span class="text-xs font-mono text-slate-400">IT: <span id="res-shaft-it" class="text-white font-bold">13 µm</span></span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 text-sm font-mono bg-atelier-bg p-3 rounded-lg border border-atelier-border">
+                            <div>
+                                <span class="text-[11px] text-slate-400 block">Écart Sup (es)</span>
+                                <span id="res-shaft-es" class="font-bold text-orange-300">-0.007 mm</span>
+                            </div>
+                            <div>
+                                <span class="text-[11px] text-slate-400 block">Écart Inf (ei)</span>
+                                <span id="res-shaft-ei" class="font-bold text-orange-300">-0.020 mm</span>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2 font-mono">
+                            <div class="flex justify-between items-center bg-atelier-card px-3 py-2 rounded-lg">
+                                <span class="text-xs text-slate-400">Cote Maxi</span>
+                                <span id="res-shaft-max" class="text-base font-bold text-white">24.993 mm</span>
+                            </div>
+                            <div class="flex justify-between items-center bg-atelier-card px-3 py-2 rounded-lg border border-orange-500/40">
+                                <span class="text-xs text-orange-300 font-bold">Cote Moyenne (CNC)</span>
+                                <span id="res-shaft-mid" class="text-lg font-extrabold text-atelier-orange">24.9865 mm</span>
+                            </div>
+                            <div class="flex justify-between items-center bg-atelier-card px-3 py-2 rounded-lg">
+                                <span class="text-xs text-slate-400">Cote Mini</span>
+                                <span id="res-shaft-min" class="text-base font-bold text-white">24.980 mm</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- ONGLET 4 : PERÇAGE SUR PCD & CALCUL INVERSE D'ANGLE                   -->
+        <!-- ===================================================================== -->
+        <section id="panel-pcd" class="tab-panel hidden space-y-5">
+            <!-- Sous-navigation PCD -->
+            <div class="flex flex-wrap gap-2">
+                <button onclick="switchPcdSub('gen')" id="btn-pcd-gen" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-sky-500 text-slate-950 transition">
+                    Mode 1 : Génération Coordonnées Trous
+                </button>
+                <button onclick="switchPcdSub('inv')" id="btn-pcd-inv" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-atelier-card text-slate-300 border border-atelier-border hover:text-white transition">
+                    Mode 2 : Angle de décalage depuis X/Y mesurés
+                </button>
+            </div>
+
+            <!-- MODE 1 : GÉNÉRATION COORDONNÉES PCD -->
+            <div id="pcd-sub-gen" class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <!-- Paramètres PCD -->
+                <div class="lg:col-span-4 bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                    <h2 class="text-base font-bold text-white border-b border-atelier-border pb-2">Paramètres Couronne (PCD)</h2>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">Centre X0 (mm)</label>
+                            <input type="number" id="pcd-x0" value="0" step="0.01" oninput="calcPCD()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">Centre Y0 (mm)</label>
+                            <input type="number" id="pcd-y0" value="0" step="0.01" oninput="calcPCD()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-sky-400 mb-1">Diamètre PCD (mm)</label>
+                            <input type="number" id="pcd-dia" value="250" step="0.1" min="0.1" oninput="calcPCD()" class="w-full bg-atelier-bg border border-atelier-border focus:border-sky-400 rounded-lg px-3 py-2 font-mono font-bold text-sky-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-atelier-orange mb-1">Nombre de trous</label>
+                            <input type="number" id="pcd-count" value="10" step="1" min="1" max="120" oninput="calcPCD()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-atelier-orange outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-300 mb-1">Angle départ (°)</label>
+                            <input type="number" id="pcd-start" value="0" step="0.1" oninput="calcPCD()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-300 mb-1">Pas angulaire (°)</label>
+                            <input type="number" id="pcd-step" placeholder="Auto" step="0.1" oninput="calcPCD()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Sens de rotation (convention trigonométrique 0° = 3h)</label>
+                        <select id="pcd-dir" onchange="calcPCD()" class="w-full bg-atelier-bg border border-atelier-border rounded-lg px-3 py-2 text-sm font-semibold text-white outline-none">
+                            <option value="1">Anti-horaire (+ degrés, standard CNC)</option>
+                            <option value="-1">Horaire (- degrés)</option>
+                        </select>
+                    </div>
+
+                    <div class="pt-2">
+                        <button onclick="copyPcdGcode()" class="w-full py-2.5 px-4 rounded-lg bg-atelier-orange hover:bg-atelier-orangeHover text-white font-bold text-sm shadow transition flex items-center justify-center gap-2">
+                            <span>Copier Bloc ISO G-Code (X / Y)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Schéma SVG + Tableau -->
+                <div class="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <!-- Visuel SVG -->
+                    <div class="bg-atelier-panel border border-atelier-border rounded-xl p-4 flex flex-col items-center justify-center">
+                        <div class="w-full flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold uppercase text-slate-400">Aperçu Implantation</span>
+                            <span id="pcd-step-info" class="text-xs font-mono text-sky-400">Pas : 36.000°</span>
+                        </div>
+                        <svg id="pcd-svg" viewBox="-140 -140 280 280" class="w-full max-w-[280px] h-auto bg-atelier-bg rounded-xl border border-atelier-border"></svg>
+                    </div>
+
+                    <!-- Tableau Coordonnées -->
+                    <div class="bg-atelier-panel border border-atelier-border rounded-xl p-4 flex flex-col max-h-[380px]">
+                        <div class="text-xs font-bold uppercase text-slate-400 mb-2 flex justify-between">
+                            <span>Tableau des Positions</span>
+                            <span class="font-mono text-slate-300">R = <span id="pcd-rad-display">125.000</span></span>
+                        </div>
+                        <div class="overflow-y-auto flex-1 border border-atelier-border rounded-lg">
+                            <table class="w-full text-left border-collapse font-mono text-xs sm:text-sm">
+                                <thead class="bg-atelier-card text-slate-300 sticky top-0">
+                                    <tr>
+                                        <th class="py-2 px-3 border-b border-atelier-border">#</th>
+                                        <th class="py-2 px-3 border-b border-atelier-border">Angle</th>
+                                        <th class="py-2 px-3 border-b border-atelier-border text-sky-400">X</th>
+                                        <th class="py-2 px-3 border-b border-atelier-border text-atelier-orange">Y</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pcd-table-body" class="divide-y divide-atelier-border/50 bg-atelier-bg">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODE 2 : CALCUL INVERSE ANGLE DE DÉCALAGE -->
+            <div id="pcd-sub-inv" class="hidden grid-cols-1 lg:grid-cols-12 gap-5">
+                <div class="lg:col-span-6 bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                    <h2 class="text-base font-bold text-white border-b border-atelier-border pb-2">
+                        Recherche d'angle depuis position X / Y
+                    </h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">Centre pièce X0 (mm)</label>
+                            <input type="number" id="inv-x0" value="0" step="0.001" oninput="calcPcdInverse()" class="w-full bg-atelier-bg border border-atelier-border rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">Centre pièce Y0 (mm)</label>
+                            <input type="number" id="inv-y0" value="0" step="0.001" oninput="calcPcdInverse()" class="w-full bg-atelier-bg border border-atelier-border rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-sky-400 mb-1">Position X mesurée (mm)</label>
+                            <input type="number" id="inv-x" value="108.253" step="0.001" oninput="calcPcdInverse()" class="w-full bg-atelier-bg border border-atelier-border focus:border-sky-400 rounded-lg px-3 py-2.5 text-lg font-mono font-bold text-sky-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-atelier-orange mb-1">Position Y mesurée (mm)</label>
+                            <input type="number" id="inv-y" value="62.500" step="0.001" oninput="calcPcdInverse()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2.5 text-lg font-mono font-bold text-atelier-orange outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-300 mb-1">PCD théorique (mm)</label>
+                            <input type="number" id="inv-pcd" value="250" step="0.01" oninput="calcPcdInverse()" class="w-full bg-atelier-bg border border-atelier-border rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-300 mb-1">Angle théorique cible (°)</label>
+                            <input type="number" id="inv-target-ang" value="30" step="0.01" oninput="calcPcdInverse()" class="w-full bg-atelier-bg border border-atelier-border rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-6 bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                    <h2 class="text-base font-bold text-white border-b border-atelier-border pb-2">Résultats Angulaires & Radiaux</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                            <div class="text-xs font-semibold text-slate-400 uppercase">Angle réel mesuré (0–360°)</div>
+                            <div id="res-inv-angle" class="mt-1 text-3xl font-mono font-extrabold text-sky-400">30.000°</div>
+                            <div id="res-inv-dms" class="text-xs font-mono text-slate-400 mt-1">30° 00' 00"</div>
+                        </div>
+
+                        <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                            <div class="text-xs font-semibold text-slate-400 uppercase">Écart angulaire vs cible</div>
+                            <div id="res-inv-diff-ang" class="mt-1 text-3xl font-mono font-extrabold text-atelier-orange">+0.000°</div>
+                            <div id="res-inv-arc" class="text-xs font-mono text-slate-400 mt-1">Soit 0.000 mm sur arc</div>
+                        </div>
+
+                        <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                            <div class="text-xs font-semibold text-slate-400 uppercase">PCD réel mesuré</div>
+                            <div id="res-inv-pcd" class="mt-1 text-2xl font-mono font-bold text-white">Ø 250.000 mm</div>
+                            <div class="text-xs font-mono text-slate-400 mt-1">Rayon réel : <span id="res-inv-rad">125.000</span> mm</div>
+                        </div>
+
+                        <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                            <div class="text-xs font-semibold text-slate-400 uppercase">Écart radial (ΔR)</div>
+                            <div id="res-inv-diff-rad" class="mt-1 text-2xl font-mono font-bold text-emerald-400">+0.000 mm</div>
+                            <div class="text-xs font-mono text-slate-400 mt-1">Par rapport au PCD théorique</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- ONGLET 5 : CONTRÔLE DE LOCALISATION (PALPAGE)                         -->
+        <!-- ===================================================================== -->
+        <section id="panel-localisation" class="tab-panel hidden space-y-5">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <!-- Colonne Entrées Palpage -->
+                <div class="lg:col-span-6 bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                    <div class="flex items-center justify-between border-b border-atelier-border pb-2">
+                        <h2 class="text-base font-bold text-white flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-atelier-orange"></span> Données de Palpage (ISO 1101)
+                        </h2>
+                        <span class="text-xs font-mono text-slate-400">Loc = 2 × √(ΔX² + ΔY²)</span>
+                    </div>
+
+                    <!-- Référence palpée (ex: Ø ext 280) -->
+                    <div class="bg-atelier-card/60 border border-atelier-border rounded-lg p-3.5 space-y-3">
+                        <div class="text-xs font-bold uppercase text-sky-400">1. Référence Palpée (ex: Ø Extérieur 280)</div>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Ø Réf (info)</label>
+                                <input type="number" id="loc-ref-dia" value="280" step="0.1" class="w-full bg-atelier-bg border border-atelier-border rounded px-2.5 py-1.5 font-mono text-sm text-slate-300 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">X Réf palpé</label>
+                                <input type="number" id="loc-xref" value="0.000" step="0.001" oninput="calcLocalisation()" class="w-full bg-atelier-bg border border-atelier-border focus:border-sky-400 rounded px-2.5 py-1.5 font-mono font-bold text-white outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">Y Réf palpé</label>
+                                <input type="number" id="loc-yref" value="0.000" step="0.001" oninput="calcLocalisation()" class="w-full bg-atelier-bg border border-atelier-border focus:border-sky-400 rounded px-2.5 py-1.5 font-mono font-bold text-white outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Position théorique du trou -->
+                    <div class="bg-atelier-card/60 border border-atelier-border rounded-lg p-3.5 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span class="text-xs font-bold uppercase text-amber-400">2. Position Théorique du Trou</span>
+                            <select id="loc-theo-mode" onchange="toggleLocMode()" class="bg-atelier-bg border border-atelier-border rounded px-2 py-1 text-xs font-semibold text-white outline-none">
+                                <option value="polar">Via PCD théorique & Angle</option>
+                                <option value="cartesian">Via Coordonnées X / Y directes</option>
+                            </select>
+                        </div>
+
+                        <div id="loc-mode-polar" class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">PCD Théorique (mm)</label>
+                                <input type="number" id="loc-pcd" value="250" step="0.01" oninput="calcLocalisation()" class="w-full bg-atelier-bg border border-atelier-border focus:border-amber-400 rounded px-2.5 py-1.5 font-mono font-bold text-amber-300 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">Angle Théorique (°)</label>
+                                <input type="number" id="loc-ang" value="0" step="0.01" oninput="calcLocalisation()" class="w-full bg-atelier-bg border border-atelier-border focus:border-amber-400 rounded px-2.5 py-1.5 font-mono font-bold text-amber-300 outline-none">
+                            </div>
+                        </div>
+
+                        <div id="loc-mode-cart" class="hidden grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">X Théorique (relatif réf)</label>
+                                <input type="number" id="loc-xth" value="125.000" step="0.001" oninput="calcLocalisation()" class="w-full bg-atelier-bg border border-atelier-border focus:border-amber-400 rounded px-2.5 py-1.5 font-mono font-bold text-amber-300 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">Y Théorique (relatif réf)</label>
+                                <input type="number" id="loc-yth" value="0.000" step="0.001" oninput="calcLocalisation()" class="w-full bg-atelier-bg border border-atelier-border focus:border-amber-400 rounded px-2.5 py-1.5 font-mono font-bold text-amber-300 outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Trou palpé & Tolérance -->
+                    <div class="bg-atelier-card/60 border border-atelier-border rounded-lg p-3.5 space-y-3">
+                        <div class="text-xs font-bold uppercase text-atelier-orange">3. Trou Palpé & Tolérance Plan</div>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">X Trou palpé</label>
+                                <input type="number" id="loc-xmes" value="125.015" step="0.001" oninput="calcLocalisation()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded px-2.5 py-1.5 font-mono font-bold text-white outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">Y Trou palpé</label>
+                                <input type="number" id="loc-ymes" value="-0.012" step="0.001" oninput="calcLocalisation()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded px-2.5 py-1.5 font-mono font-bold text-white outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-emerald-400 mb-1">Tolérance Ø (mm)</label>
+                                <input type="number" id="loc-tol" value="0.06" step="0.005" min="0.001" oninput="calcLocalisation()" class="w-full bg-atelier-bg border border-emerald-500/50 focus:border-emerald-400 rounded px-2.5 py-1.5 font-mono font-bold text-emerald-400 outline-none">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Colonne Verdict & Cible Visuelle -->
+                <div class="lg:col-span-6 bg-atelier-panel border border-atelier-border rounded-xl p-5 flex flex-col justify-between space-y-4">
+                    <!-- Bandeau Verdict -->
+                    <div id="loc-verdict-box" class="rounded-xl p-4 border-2 border-emerald-500 bg-emerald-500/15 flex items-center justify-between">
+                        <div>
+                            <div class="text-xs font-bold uppercase tracking-wider text-emerald-300">Verdict Métrologie</div>
+                            <div id="loc-verdict-text" class="text-2xl sm:text-3xl font-extrabold text-emerald-400 tracking-tight">CONFORME</div>
+                        </div>
+                        <div class="text-right font-mono">
+                            <div class="text-xs text-slate-300">Défaut Localisation</div>
+                            <div id="loc-result-val" class="text-2xl sm:text-3xl font-extrabold text-white">Ø 0.038 mm</div>
+                            <div id="loc-margin-val" class="text-xs font-bold text-emerald-300">Marge : +0.022 mm</div>
+                        </div>
+                    </div>
+
+                    <!-- Détails numériques + Cible SVG -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                        <div class="space-y-2.5 font-mono text-sm">
+                            <div class="bg-atelier-card p-3 rounded-lg border border-atelier-border flex justify-between">
+                                <span class="text-slate-400">Cible Xth absolu :</span>
+                                <span id="loc-abs-xth" class="font-bold text-slate-200">125.000</span>
+                            </div>
+                            <div class="bg-atelier-card p-3 rounded-lg border border-atelier-border flex justify-between">
+                                <span class="text-slate-400">Cible Yth absolu :</span>
+                                <span id="loc-abs-yth" class="font-bold text-slate-200">0.000</span>
+                            </div>
+                            <div class="bg-atelier-card p-3 rounded-lg border border-atelier-border flex justify-between">
+                                <span class="text-slate-400">Écart ΔX :</span>
+                                <span id="loc-dx" class="font-bold text-sky-400">+0.015 mm</span>
+                            </div>
+                            <div class="bg-atelier-card p-3 rounded-lg border border-atelier-border flex justify-between">
+                                <span class="text-slate-400">Écart ΔY :</span>
+                                <span id="loc-dy" class="font-bold text-atelier-orange">-0.012 mm</span>
+                            </div>
+                            <div class="bg-atelier-card p-3 rounded-lg border border-atelier-border flex justify-between">
+                                <span class="text-slate-400">Écart Radial ΔR :</span>
+                                <span id="loc-dr" class="font-bold text-white">0.019 mm</span>
+                            </div>
+                        </div>
+
+                        <!-- Cible Graphique SVG -->
+                        <div class="flex flex-col items-center justify-center bg-atelier-bg border border-atelier-border rounded-xl p-3">
+                            <span class="text-[11px] font-semibold text-slate-400 mb-1">Zone de Tolérance Ø <span id="loc-svg-tol-lbl">0.06</span></span>
+                            <svg id="loc-svg" viewBox="-110 -110 220 220" class="w-48 h-48">
+                                <!-- Grille et cercles générés en JS -->
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- ONGLET 6 : TRIGONOMÉTRIE & CHANFREINAGE                               -->
+        <!-- ===================================================================== -->
+        <section id="panel-trigo" class="tab-panel hidden space-y-5">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <!-- Module 1 : Triangle Rectangle -->
+                <div class="lg:col-span-6 bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                    <div class="flex items-center justify-between border-b border-atelier-border pb-2">
+                        <h2 class="text-base font-bold text-white flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span> Triangle Rectangle (Saisir 2 valeurs)
+                        </h2>
+                        <button onclick="resetTrigo()" class="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 transition">Effacer</button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-sky-400 mb-1">Angle α (degrés)</label>
+                            <input type="number" id="tri-ang" placeholder="ex: 30" step="0.01" oninput="handleTrigoInput('ang')" class="w-full bg-atelier-bg border border-atelier-border focus:border-sky-400 rounded-lg px-3 py-2 font-mono font-bold text-sky-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Hypoténuse H (mm)</label>
+                            <input type="number" id="tri-hyp" placeholder="ex: 50" step="0.01" oninput="handleTrigoInput('hyp')" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Côté Opposé O (mm)</label>
+                            <input type="number" id="tri-opp" placeholder="ex: 25" step="0.01" oninput="handleTrigoInput('opp')" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Côté Adjacent A (mm)</label>
+                            <input type="number" id="tri-adj" placeholder="ex: 43.301" step="0.01" oninput="handleTrigoInput('adj')" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Schéma explicatif triangle -->
+                    <div class="bg-atelier-bg border border-atelier-border rounded-xl p-3 flex items-center justify-between gap-4">
+                        <svg viewBox="0 0 220 120" class="w-44 h-24 shrink-0">
+                            <polygon points="20,100 190,100 190,20" fill="rgba(56, 189, 248, 0.12)" stroke="#38bdf8" stroke-width="2"/>
+                            <polyline points="175,100 175,85 190,85" fill="none" stroke="#64748b" stroke-width="1.5"/>
+                            <path d="M 55,100 A 35,35 0 0,0 50,82" fill="none" stroke="#f97316" stroke-width="2"/>
+                            <text x="62" y="92" fill="#f97316" font-size="12" font-family="monospace" font-weight="bold">α</text>
+                            <text x="95" y="114" fill="#cbd5e1" font-size="11" font-family="sans-serif">Adjacent (A)</text>
+                            <text x="195" y="65" fill="#cbd5e1" font-size="11" font-family="sans-serif">Opp (O)</text>
+                            <text x="80" y="50" fill="#38bdf8" font-size="11" font-family="sans-serif" transform="rotate(-25 80,50)">Hypoténuse (H)</text>
+                        </svg>
+                        <div class="text-xs font-mono text-slate-300 space-y-1">
+                            <div>Angle β (90-α) : <span id="tri-beta" class="text-white font-bold">—</span></div>
+                            <div>Surface : <span id="tri-area" class="text-white font-bold">—</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Module 2 : Calcul Profondeur Z Fraise à Chanfreiner -->
+                <div class="lg:col-span-6 bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                    <h2 class="text-base font-bold text-white border-b border-atelier-border pb-2 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-atelier-orange"></span> Profondeur Z Fraise à Chanfreiner
+                    </h2>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-slate-300 mb-1">Angle total fraise (°)</label>
+                            <select id="ch-angle" onchange="calcChanfrein()" class="w-full bg-atelier-bg border border-atelier-border rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                                <option value="90" selected>90° (Chanfrein 45°)</option>
+                                <option value="60">60° (Chanfrein 30°)</option>
+                                <option value="120">120° (Chanfrein 60°)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-300 mb-1">Plat en pointe Øp (mm)</label>
+                            <input type="number" id="ch-tip" value="2.0" step="0.1" min="0" oninput="calcChanfrein()" class="w-full bg-atelier-bg border border-atelier-border rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-sky-400 mb-1">Largeur chanfrein C (mm)</label>
+                            <input type="number" id="ch-width" value="1.5" step="0.1" min="0.05" oninput="calcChanfrein()" class="w-full bg-atelier-bg border border-atelier-border focus:border-sky-400 rounded-lg px-3 py-2 font-mono font-bold text-sky-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-atelier-orange mb-1">Garde / Dégagement (mm)</label>
+                            <input type="number" id="ch-offset" value="1.0" step="0.1" min="0" oninput="calcChanfrein()" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-atelier-orange outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 pt-2">
+                        <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                            <div class="text-xs font-semibold text-slate-400 uppercase">Profondeur Z à programmer</div>
+                            <div class="mt-1 flex items-baseline gap-1">
+                                <span id="res-ch-z" class="text-3xl font-mono font-extrabold text-atelier-orange">-2.500</span>
+                                <span class="text-xs text-slate-400">mm</span>
+                            </div>
+                            <div class="text-[11px] text-slate-400 mt-1">Depuis Z0 surface pièce</div>
+                        </div>
+
+                        <div class="bg-atelier-card border border-atelier-border rounded-xl p-4">
+                            <div class="text-xs font-semibold text-slate-400 uppercase">Ø de coupe effectif</div>
+                            <div class="mt-1 flex items-baseline gap-1">
+                                <span id="res-ch-deff" class="text-3xl font-mono font-extrabold text-sky-400">4.000</span>
+                                <span class="text-xs text-slate-400">mm</span>
+                            </div>
+                            <div class="text-[11px] text-slate-400 mt-1">Pour calcul Vc / tr/min</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================================== -->
+        <!-- ONGLET 7 : RELEVÉ MULTI-TROUS (TRIDI / MMT) & ARCHIVES                -->
+        <!-- ===================================================================== -->
+        <section id="panel-mmt" class="tab-panel hidden space-y-5">
+
+            <!-- 1. EN-TÊTE TRAÇABILITÉ & PARAMÈTRES GÉOMÉTRIQUES -->
+            <div class="bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-atelier-border pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                        <h2 class="text-base font-bold text-white">Fiche de Contrôle PCD — Type Rapport Tridi (MMT)</h2>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="simulateMmtData()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-400 border border-sky-500/40 text-xs font-bold transition">
+                            Simuler un relevé (Test)
+                        </button>
+                        <button onclick="clearMmtMeasured()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 text-xs font-semibold transition">
+                            Vider mesures
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ligne Traçabilité (OF, Plan, Date, Opérateur) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-atelier-card/60 p-3.5 rounded-xl border border-atelier-border">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-atelier-orange mb-1">N° d'OF *</label>
+                        <input type="text" id="mmt-of" placeholder="ex: OF-2026-845" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 text-sm font-mono font-bold text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-sky-400 mb-1">N° de Plan / Réf *</label>
+                        <input type="text" id="mmt-plan" placeholder="ex: PL-402-IND-B" class="w-full bg-atelier-bg border border-atelier-border focus:border-sky-400 rounded-lg px-3 py-2 text-sm font-mono font-bold text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-slate-300 mb-1">Date du contrôle</label>
+                        <input type="date" id="mmt-date" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 text-sm font-mono text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Opérateur / Note</label>
+                        <input type="text" id="mmt-note" placeholder="ex: Pièce n°1 / Palpeur Renishaw" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 text-sm text-white outline-none">
+                    </div>
+                </div>
+
+                <!-- Ligne Géométrie PCD & Tolérance -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 items-end">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Centre X0 (mm)</label>
+                        <input type="number" id="mmt-x0" value="0" step="0.001" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Centre Y0 (mm)</label>
+                        <input type="number" id="mmt-y0" value="0" step="0.001" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-sky-400 mb-1">Ø PCD Théo (mm)</label>
+                        <input type="number" id="mmt-pcd" value="250" step="0.01" min="0.1" class="w-full bg-atelier-bg border border-atelier-border focus:border-sky-400 rounded-lg px-3 py-2 font-mono font-bold text-sky-400 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-atelier-orange mb-1">Nb Trous (N)</label>
+                        <input type="number" id="mmt-count" value="10" step="1" min="1" max="72" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-atelier-orange outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-300 mb-1">Angle départ (°)</label>
+                        <input type="number" id="mmt-start" value="0" step="0.1" class="w-full bg-atelier-bg border border-atelier-border focus:border-atelier-orange rounded-lg px-3 py-2 font-mono font-bold text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-emerald-400 mb-1">Tol. Loc Ø IT (mm)</label>
+                        <input type="number" id="mmt-tol" value="0.06" step="0.005" min="0.001" oninput="recalcMmtRows()" class="w-full bg-atelier-bg border border-emerald-500/50 focus:border-emerald-400 rounded-lg px-3 py-2 font-mono font-bold text-emerald-400 outline-none">
+                    </div>
+                    <div class="col-span-2 sm:col-span-4 lg:col-span-1">
+                        <button onclick="generateMmtGrid()" class="w-full py-2 px-3 rounded-lg bg-atelier-orange hover:bg-atelier-orangeHover text-white font-bold text-xs sm:text-sm shadow transition">
+                            Générer grille
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. BANDEAU DE SYNTHÈSE GLOBALE -->
+            <div id="mmt-summary-banner" class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                <!-- Verdict -->
+                <div id="mmt-verdict-card" class="col-span-2 lg:col-span-1 bg-atelier-panel border-2 border-slate-600 rounded-xl p-3.5 flex flex-col justify-center">
+                    <div class="text-[11px] font-bold uppercase text-slate-400">Verdict Global</div>
+                    <div id="mmt-global-status" class="text-xl font-extrabold text-slate-300 mt-0.5">EN ATTENTE</div>
+                    <div id="mmt-measured-count" class="text-xs font-mono text-slate-400 mt-0.5">0 / 10 trous saisis</div>
+                </div>
+
+                <!-- Loc Max -->
+                <div class="bg-atelier-panel border border-atelier-border rounded-xl p-3.5">
+                    <div class="text-[11px] font-bold uppercase text-slate-400">Localisation MAX</div>
+                    <div id="mmt-max-loc" class="text-2xl font-mono font-extrabold text-white mt-0.5">—</div>
+                    <div id="mmt-max-hole" class="text-xs font-mono text-atelier-orange mt-0.5">Trou : —</div>
+                </div>
+
+                <!-- Loc Moyenne -->
+                <div class="bg-atelier-panel border border-atelier-border rounded-xl p-3.5">
+                    <div class="text-[11px] font-bold uppercase text-slate-400">Localisation Moyenne</div>
+                    <div id="mmt-avg-loc" class="text-2xl font-mono font-extrabold text-sky-400 mt-0.5">—</div>
+                    <div class="text-xs font-mono text-slate-400 mt-0.5">Dispersion globale</div>
+                </div>
+
+                <!-- Barycentre (Décalage d'origine G54) -->
+                <div class="col-span-2 bg-atelier-panel border border-atelier-border rounded-xl p-3.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold uppercase text-amber-400">Décalage Centre Moyen (Barycentre G54)</span>
+                        <span id="mmt-bary-diag" class="text-[11px] font-mono text-slate-400">Correction origine</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mt-1.5 font-mono text-sm">
+                        <div class="bg-atelier-bg px-2.5 py-1 rounded border border-atelier-border">
+                            <span class="text-slate-400 text-xs">ΔX moy : </span>
+                            <span id="mmt-bary-dx" class="font-bold text-white">0.000</span>
+                        </div>
+                        <div class="bg-atelier-bg px-2.5 py-1 rounded border border-atelier-border">
+                            <span class="text-slate-400 text-xs">ΔY moy : </span>
+                            <span id="mmt-bary-dy" class="font-bold text-white">0.000</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. GRILLE DE SAISIE + VISUALISATION TRIDI (CANVAS) -->
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-5">
+
+                <!-- Tableau de saisie & résultats par trou -->
+                <div class="xl:col-span-7 bg-atelier-panel border border-atelier-border rounded-xl p-4 flex flex-col">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-300">Saisie des coordonnées palpées (Pavé numérique : Entrée / Tab)</span>
+                        <span class="text-[11px] font-mono text-slate-400">Loc = 2 × √(ΔX² + ΔY²)</span>
+                    </div>
+
+                    <div class="overflow-x-auto overflow-y-auto max-h-[520px] border border-atelier-border rounded-lg">
+                        <table class="w-full text-left border-collapse font-mono text-xs">
+                            <thead class="bg-atelier-card text-slate-300 sticky top-0 z-10">
+                                <tr>
+                                    <th class="py-2.5 px-2 border-b border-atelier-border">Trou</th>
+                                    <th class="py-2.5 px-2 border-b border-atelier-border text-slate-400">X Théo</th>
+                                    <th class="py-2.5 px-2 border-b border-atelier-border text-slate-400">Y Théo</th>
+                                    <th class="py-2.5 px-2 border-b border-atelier-border text-sky-400">X Palpé</th>
+                                    <th class="py-2.5 px-2 border-b border-atelier-border text-atelier-orange">Y Palpé</th>
+                                    <th class="py-2.5 px-2 border-b border-atelier-border">ΔR (mm)</th>
+                                    <th class="py-2.5 px-2 border-b border-atelier-border">ΔAngle</th>
+                                    <th class="py-2.5 px-2 border-b border-atelier-border">Loc Ø</th>
+                                    <th class="py-2.5 px-2 border-b border-atelier-border text-center">État</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mmt-table-body" class="divide-y divide-atelier-border/60 bg-atelier-bg">
+                                <!-- Généré dynamiquement -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Boutons d'action sauvegarde & export -->
+                    <div class="mt-4 pt-3 border-t border-atelier-border flex flex-wrap items-center justify-between gap-3">
+                        <button onclick="saveMmtRecord()" class="flex-1 sm:flex-none px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2">
+                            <span>Enregistrer dans les Archives</span>
+                        </button>
+                        <button onclick="exportCurrentMmtCsv()" class="flex-1 sm:flex-none px-4 py-2.5 rounded-lg bg-atelier-card hover:bg-slate-700 text-sky-400 border border-sky-500/40 font-bold text-xs sm:text-sm transition">
+                            Exporter Rapport CSV (Excel)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Rapport Graphique Vectoriel Tridi (Canvas) -->
+                <div class="xl:col-span-5 bg-atelier-panel border border-atelier-border rounded-xl p-4 flex flex-col justify-between space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-atelier-border pb-2">
+                        <div>
+                            <h3 class="text-sm font-bold text-white">Carte Vectorielle des Écarts (Vue Tridi)</h3>
+                            <p class="text-[11px] text-slate-400">Cercles = Zone tolérance IT | Flèches = Direction défaut</p>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <label class="text-[11px] font-semibold text-slate-400">Zoom défauts :</label>
+                            <select id="mmt-amp" onchange="drawMmtCanvas()" class="bg-atelier-bg border border-atelier-border rounded px-2 py-1 text-xs font-mono font-bold text-atelier-orange outline-none">
+                                <option value="50">x50</option>
+                                <option value="100">x100</option>
+                                <option value="250" selected>x250</option>
+                                <option value="500">x500</option>
+                                <option value="1000">x1000</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Conteneur Canvas Responsive -->
+                    <div id="mmt-canvas-wrapper" class="relative w-full aspect-square max-h-[430px] mx-auto bg-atelier-bg border border-atelier-border rounded-xl overflow-hidden">
+                        <canvas id="mmt-canvas"></canvas>
+                    </div>
+
+                    <!-- Légende & Option Barycentre -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] bg-atelier-card/60 px-3 py-2 rounded-lg border border-atelier-border">
+                        <div class="flex items-center gap-3">
+                            <span class="flex items-center gap-1 text-emerald-400 font-semibold"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span> OK (≤ IT)</span>
+                            <span class="flex items-center gap-1 text-red-400 font-semibold"><span class="w-2.5 h-2.5 rounded-full bg-red-400 inline-block"></span> Hors Tol</span>
+                            <span class="flex items-center gap-1 text-amber-400 font-semibold"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> Centre moy.</span>
+                        </div>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 font-semibold">
+                            <input type="checkbox" id="mmt-show-bary" checked onchange="drawMmtCanvas()" class="accent-amber-400 rounded">
+                            <span>Afficher Barycentre</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. GESTIONNAIRE D'ARCHIVES & SAUVEGARDE JSON -->
+            <div class="bg-atelier-panel border border-atelier-border rounded-xl p-5 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-atelier-border pb-3">
+                    <div>
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span> Historique & Archives des Contrôles Enregistrés
+                        </h3>
+                        <p class="text-xs text-slate-400">Stockage local navigateur + Export/Import JSON pour sauvegarde clé USB ou dépôt GitHub</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input type="text" id="mmt-search" oninput="renderMmtArchives()" placeholder="Filtrer par N° OF ou Plan..." class="bg-atelier-bg border border-atelier-border focus:border-sky-400 rounded-lg px-3 py-1.5 text-xs text-white outline-none w-48 sm:w-56">
+                        <button onclick="exportAllArchivesJson()" class="px-3 py-1.5 rounded-lg bg-atelier-card hover:bg-slate-700 text-slate-200 border border-atelier-border text-xs font-semibold transition">
+                            Exporter Base (.json)
+                        </button>
+                        <label class="px-3 py-1.5 rounded-lg bg-atelier-card hover:bg-slate-700 text-amber-400 border border-amber-500/40 text-xs font-semibold cursor-pointer transition">
+                            Importer (.json)
+                            <input type="file" id="mmt-import-file" accept=".json" onchange="importArchivesJson(event)" class="hidden">
+                        </label>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto border border-atelier-border rounded-lg">
+                    <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                        <thead class="bg-atelier-card text-slate-300 font-semibold">
+                            <tr>
+                                <th class="py-2.5 px-3 border-b border-atelier-border">Date</th>
+                                <th class="py-2.5 px-3 border-b border-atelier-border text-atelier-orange">N° OF</th>
+                                <th class="py-2.5 px-3 border-b border-atelier-border text-sky-400">N° Plan</th>
+                                <th class="py-2.5 px-3 border-b border-atelier-border">PCD / Trous</th>
+                                <th class="py-2.5 px-3 border-b border-atelier-border">Loc Max / IT</th>
+                                <th class="py-2.5 px-3 border-b border-atelier-border">Verdict</th>
+                                <th class="py-2.5 px-3 border-b border-atelier-border text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mmt-archives-body" class="divide-y divide-atelier-border/60 bg-atelier-bg font-mono text-xs">
+                            <!-- Archives chargées depuis localStorage -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- ========================================================================= -->
+    <!-- LOGIQUE JAVASCRIPT COMPLÈTE & NORME ISO 286-2                             -->
+    <!-- ========================================================================= -->
+    <script>
+        // --- GESTION NAVIGATION & UTILITAIRES ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+            document.getElementById('panel-' + tabId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-atelier-orange', 'text-white', 'shadow-md', 'shadow-orange-500/20', 'font-bold');
+                btn.classList.add('bg-atelier-card', 'text-slate-300', 'border', 'border-atelier-border', 'font-semibold');
+            });
+
+            const activeBtn = document.getElementById('tab-' + tabId);
+            activeBtn.classList.remove('bg-atelier-card', 'text-slate-300', 'border', 'border-atelier-border', 'font-semibold');
+            activeBtn.classList.add('bg-atelier-orange', 'text-white', 'shadow-md', 'shadow-orange-500/20', 'font-bold');
+        }
+
+        function showToast(msg) {
+            const box = document.getElementById('toast-box');
+            document.getElementById('toast-msg').innerText = msg;
+            box.classList.remove('hidden');
+            box.classList.add('flex');
+            setTimeout(() => {
+                box.classList.add('hidden');
+                box.classList.remove('flex');
+            }, 2200);
+        }
+
+        function copyText(text) {
+            const temp = document.createElement('textarea');
+            temp.value = text;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            showToast('Copié dans le presse-papiers !');
+        }
+
+        // --- 1. FRAISAGE ---
+        function applyPresetFraisage(vc, fz, mat = '') {
+            document.getElementById('fr-vc').value = vc;
+            document.getElementById('fr-fz').value = fz;
+            const titaneNote = document.getElementById('fr-titane-note');
+            if (mat === 'Titane') {
+                const d = parseFloat(document.getElementById('fr-d').value) || 16;
+                document.getElementById('fr-ap').value = +(d * 0.5).toFixed(2);
+                document.getElementById('fr-ae').value = +(d * 0.2).toFixed(2);
+                titaneNote.classList.remove('hidden');
+            } else {
+                titaneNote.classList.add('hidden');
+            }
+            calcFraisage();
+        }
+
+        function resetFraisage() {
+            document.getElementById('fr-d').value = 16;
+            document.getElementById('fr-z').value = 4;
+            document.getElementById('fr-vc').value = 160;
+            document.getElementById('fr-fz').value = 0.08;
+            document.getElementById('fr-ae').value = 8;
+            document.getElementById('fr-ap').value = 10;
+            document.getElementById('fr-titane-note').classList.add('hidden');
+            calcFraisage();
+        }
+
+        function calcFraisage() {
+            const d = parseFloat(document.getElementById('fr-d').value) || 0;
+            const z = parseFloat(document.getElementById('fr-z').value) || 0;
+            const vc = parseFloat(document.getElementById('fr-vc').value) || 0;
+            const fz = parseFloat(document.getElementById('fr-fz').value) || 0;
+            const ae = parseFloat(document.getElementById('fr-ae').value) || 0;
+            const ap = parseFloat(document.getElementById('fr-ap').value) || 0;
+
+            if (d <= 0) return;
+
+            const n = (vc * 1000) / (Math.PI * d);
+            const f = fz * z;
+            const vf = n * f;
+            const q = (ae * ap * vf) / 1000;
+
+            const nRound = Math.round(n);
+            const vfRound = Math.round(vf);
+
+            document.getElementById('res-fr-n').innerText = nRound;
+            document.getElementById('res-fr-vf').innerText = vfRound;
+            document.getElementById('res-fr-f').innerText = f.toFixed(3);
+            document.getElementById('res-fr-q').innerText = q.toFixed(1);
+            document.getElementById('fr-gcode').innerText = `S${nRound} M03 F${vfRound}`;
+        }
+
+        function roundFraisage() {
+            const nEl = document.getElementById('res-fr-n');
+            const vfEl = document.getElementById('res-fr-vf');
+            const nVal = Math.round(parseFloat(nEl.innerText) / 50) * 50;
+            const vfVal = Math.round(parseFloat(vfEl.innerText) / 10) * 10;
+            nEl.innerText = nVal;
+            vfEl.innerText = vfVal;
+            document.getElementById('fr-gcode').innerText = `S${nVal} M03 F${vfVal}`;
+            showToast('Arrondi atelier appliqué');
+        }
+
+        // --- 2. TOURNAGE ---
+        function resetTournage() {
+            document.getElementById('tr-d').value = 60;
+            document.getElementById('tr-vc').value = 220;
+            document.getElementById('tr-f').value = 0.20;
+            document.getElementById('tr-ap').value = 2.0;
+            document.getElementById('tr-re').value = 0.8;
+            calcTournage();
+        }
+
+        function calcTournage() {
+            const d = parseFloat(document.getElementById('tr-d').value) || 0;
+            const vc = parseFloat(document.getElementById('tr-vc').value) || 0;
+            const f = parseFloat(document.getElementById('tr-f').value) || 0;
+            const ap = parseFloat(document.getElementById('tr-ap').value) || 0;
+            const re = parseFloat(document.getElementById('tr-re').value) || 0;
+
+            if (d <= 0) return;
+
+            const n = (vc * 1000) / (Math.PI * d);
+            const vf = n * f;
+            const q = vc * ap * f; // cm3/min exact (Vc m/min * ap mm * f mm/tr)
+
+            // Rugosité théorique : Rt = f² / (8 * re) en mm -> * 1000 pour µm ; Ra ≈ Rt / 4
+            let rt = 0, ra = 0;
+            if (re > 0) {
+                rt = ((f * f) / (8 * re)) * 1000;
+                ra = rt / 4;
+            }
+
+            document.getElementById('res-tr-n').innerText = Math.round(n);
+            document.getElementById('res-tr-vf').innerText = Math.round(vf);
+            document.getElementById('res-tr-q').innerText = q.toFixed(1);
+            document.getElementById('res-tr-ra').innerText = ra.toFixed(2);
+            document.getElementById('res-tr-rt').innerText = rt.toFixed(2);
+            document.getElementById('tr-gcode').innerText = `G96 S${Math.round(vc)} M03 / G95 F${f.toFixed(2)}`;
+        }
+
+        // --- 3. NORME ISO 286-2 (TABLES OFFICIELLES EN MICROMÈTRES) ---
+        // Paliers de diamètres ISO 286-2 : [minExclusive, maxInclusive]
+        const ISO_STEPS = [
+            [0, 3], [3, 6], [6, 10], [10, 18], [18, 30], [30, 50],
+            [50, 80], [80, 120], [120, 180], [180, 250], [250, 315],
+            [315, 400], [400, 500]
+        ];
+
+        // Valeurs IT en µm par palier (indices 0 à 12)
+        const ISO_IT = {
+            5:  [4, 5, 6, 8, 9, 11, 13, 15, 18, 20, 23, 25, 27],
+            6:  [6, 8, 9, 11, 13, 16, 19, 22, 25, 29, 32, 36, 40],
+            7:  [10, 12, 15, 18, 21, 25, 30, 35, 40, 46, 52, 57, 63],
+            8:  [14, 18, 22, 27, 33, 39, 46, 54, 63, 72, 81, 89, 97],
+            9:  [25, 30, 36, 43, 52, 62, 74, 87, 100, 115, 130, 140, 155],
+            11: [60, 75, 90, 110, 130, 160, 190, 220, 250, 290, 320, 360, 400]
+        };
+
+        // Écarts fondamentaux Arbres (es pour d..h, ei pour k..p) en µm
+        const SHAFT_FUND = {
+            d: [-20, -30, -40, -50, -65, -80, -100, -120, -145, -170, -190, -210, -230], // es
+            e: [-14, -20, -25, -32, -40, -50, -60, -72, -85, -100, -110, -125, -135],     // es
+            f: [-6, -10, -13, -16, -20, -25, -30, -36, -43, -50, -56, -62, -68],          // es
+            g: [-2, -4, -5, -6, -7, -9, -10, -12, -14, -15, -17, -18, -20],               // es
+            h: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],                                   // es
+            k: [0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 5],                                   // ei (IT4..IT7)
+            m: [2, 4, 6, 7, 8, 9, 11, 13, 15, 17, 20, 21, 23],                            // ei
+            n: [4, 8, 10, 12, 15, 17, 20, 23, 27, 31, 34, 37, 40],                        // ei
+            p: [6, 12, 15, 18, 22, 26, 32, 37, 43, 50, 56, 62, 68]                        // ei
+        };
+
+        // Différence Δ (IT_n - IT_{n-1}) pour alésages K, M, N, P en IT6/IT7
+        const DELTA_IT = {
+            6: [2, 3, 3, 3, 4, 5, 6, 7, 7, 9, 9, 11, 13], // IT6 - IT5
+            7: [4, 4, 6, 7, 8, 9, 11, 13, 15, 17, 20, 21, 23] // IT7 - IT6
+        };
+
+        function getIsoStepIndex(d) {
+            for (let i = 0; i < ISO_STEPS.length; i++) {
+                if (d > ISO_STEPS[i][0] && d <= ISO_STEPS[i][1]) return i;
+            }
+            return -1;
+        }
+
+        function getShaftDeviations(idx, code) {
+            const letter = code.replace(/[0-9]/g, '');
+            const grade = parseInt(code.replace(/[^0-9]/g, ''), 10);
+            const it = ISO_IT[grade][idx];
+            let es = 0, ei = 0;
+
+            if (letter === 'js') {
+                es = it / 2;
+                ei = -it / 2;
+            } else if (['d', 'e', 'f', 'g', 'h'].includes(letter)) {
+                es = SHAFT_FUND[letter][idx];
+                ei = es - it;
+            } else {
+                // k, m, n, p
+                ei = SHAFT_FUND[letter][idx];
+                es = ei + it;
+            }
+            return { es, ei, it };
+        }
+
+        function getHoleDeviations(idx, code) {
+            const letter = code.replace(/[0-9]/g, '');
+            const grade = parseInt(code.replace(/[^0-9]/g, ''), 10);
+            const it = ISO_IT[grade][idx];
+            let ES = 0, EI = 0;
+
+            if (letter === 'H') {
+                EI = 0;
+                ES = it;
+            } else if (letter === 'JS') {
+                ES = it / 2;
+                EI = -it / 2;
+            } else if (['E', 'F', 'G'].includes(letter)) {
+                const lower = letter.toLowerCase();
+                EI = -SHAFT_FUND[lower][idx];
+                ES = EI + it;
+            } else {
+                // K, M, N, P (règle générale ISO 286-2 avec Δ pour grades <= 7)
+                const lower = letter.toLowerCase();
+                const delta = (grade <= 7 && idx > 0) ? DELTA_IT[grade][idx] : 0;
+                ES = -SHAFT_FUND[lower][idx] + delta;
+                EI = ES - it;
+            }
+            return { ES, EI, it };
+        }
+
+        function formatMicronsToMm(um, showPlus = true) {
+            const mm = um / 1000;
+            const sign = (mm > 0 && showPlus) ? '+' : '';
+            return `${sign}${mm.toFixed(4).replace(/0$/, '')} mm`;
+        }
+
+        function calcISO() {
+            const dim = parseFloat(document.getElementById('iso-dim').value);
+            const holeCode = document.getElementById('iso-hole').value;
+            const shaftCode = document.getElementById('iso-shaft').value;
+            const warn = document.getElementById('iso-warning');
+
+            const idx = getIsoStepIndex(dim);
+            if (idx === -1 || isNaN(dim)) {
+                warn.classList.remove('hidden');
+                return;
+            }
+            warn.classList.add('hidden');
+
+            const hole = getHoleDeviations(idx, holeCode);
+            const shaft = getShaftDeviations(idx, shaftCode);
+
+            // Alésage en mm
+            const hMax = dim + hole.ES / 1000;
+            const hMin = dim + hole.EI / 1000;
+            const hMid = (hMax + hMin) / 2;
+
+            document.getElementById('res-hole-code').innerText = `${dim} ${holeCode}`;
+            document.getElementById('res-hole-it').innerText = `${hole.it} µm`;
+            document.getElementById('res-hole-es').innerText = formatMicronsToMm(hole.ES);
+            document.getElementById('res-hole-ei').innerText = formatMicronsToMm(hole.EI);
+            document.getElementById('res-hole-max').innerText = `${hMax.toFixed(4)} mm`;
+            document.getElementById('res-hole-mid').innerText = `${hMid.toFixed(4)} mm`;
+            document.getElementById('res-hole-min').innerText = `${hMin.toFixed(4)} mm`;
+
+            // Arbre en mm
+            const sMax = dim + shaft.es / 1000;
+            const sMin = dim + shaft.ei / 1000;
+            const sMid = (sMax + sMin) / 2;
+
+            document.getElementById('res-shaft-code').innerText = `${dim} ${shaftCode}`;
+            document.getElementById('res-shaft-it').innerText = `${shaft.it} µm`;
+            document.getElementById('res-shaft-es').innerText = formatMicronsToMm(shaft.es);
+            document.getElementById('res-shaft-ei').innerText = formatMicronsToMm(shaft.ei);
+            document.getElementById('res-shaft-max').innerText = `${sMax.toFixed(4)} mm`;
+            document.getElementById('res-shaft-mid').innerText = `${sMid.toFixed(4)} mm`;
+            document.getElementById('res-shaft-min').innerText = `${sMin.toFixed(4)} mm`;
+
+            // Calcul Ajustement (Jeu = Alésage - Arbre)
+            const jeuMax = hMax - sMin;
+            const jeuMin = hMin - sMax;
+
+            document.getElementById('fit-label').innerText = `Ø${dim} ${holeCode}/${shaftCode}`;
+            const badge = document.getElementById('fit-type-badge');
+
+            if (jeuMin >= 0) {
+                badge.innerText = 'AJUSTEMENT AVEC JEU';
+                badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
+                document.getElementById('fit-min-label').innerText = 'Jeu Mini';
+                document.getElementById('fit-max-label').innerText = 'Jeu Maxi';
+                document.getElementById('fit-min-val').innerText = `+${jeuMin.toFixed(3)} mm`;
+                document.getElementById('fit-max-val').innerText = `+${jeuMax.toFixed(3)} mm`;
+            } else if (jeuMax <= 0) {
+                badge.innerText = 'AJUSTEMENT SERRÉ';
+                badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/40';
+                document.getElementById('fit-min-label').innerText = 'Serrage Mini';
+                document.getElementById('fit-max-label').innerText = 'Serrage Maxi';
+                document.getElementById('fit-min-val').innerText = `${Math.abs(jeuMax).toFixed(3)} mm`;
+                document.getElementById('fit-max-val').innerText = `${Math.abs(jeuMin).toFixed(3)} mm`;
+            } else {
+                badge.innerText = 'INCERTAIN (JEU / SERRAGE)';
+                badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40';
+                document.getElementById('fit-min-label').innerText = 'Serrage Maxi';
+                document.getElementById('fit-max-label').innerText = 'Jeu Maxi';
+                document.getElementById('fit-min-val').innerText = `${jeuMin.toFixed(3)} mm`;
+                document.getElementById('fit-max-val').innerText = `+${jeuMax.toFixed(3)} mm`;
+            }
+        }
+
+        // --- 4. PERÇAGE SUR PCD & CALCUL INVERSE ---
+        let pcdCoordsCache = [];
+
+        function switchPcdSub(mode) {
+            const genDiv = document.getElementById('pcd-sub-gen');
+            const invDiv = document.getElementById('pcd-sub-inv');
+            const btnGen = document.getElementById('btn-pcd-gen');
+            const btnInv = document.getElementById('btn-pcd-inv');
+
+            if (mode === 'gen') {
+                genDiv.classList.remove('hidden');
+                invDiv.classList.add('hidden');
+                btnGen.className = 'px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-sky-500 text-slate-950 transition';
+                btnInv.className = 'px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-atelier-card text-slate-300 border border-atelier-border hover:text-white transition';
+            } else {
+                genDiv.classList.add('hidden');
+                invDiv.classList.remove('hidden');
+                invDiv.classList.add('grid');
+                btnInv.className = 'px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-sky-500 text-slate-950 transition';
+                btnGen.className = 'px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-atelier-card text-slate-300 border border-atelier-border hover:text-white transition';
+                calcPcdInverse();
+            }
+        }
+
+        function calcPCD() {
+            const x0 = parseFloat(document.getElementById('pcd-x0').value) || 0;
+            const y0 = parseFloat(document.getElementById('pcd-y0').value) || 0;
+            const dia = parseFloat(document.getElementById('pcd-dia').value) || 0;
+            const count = Math.min(120, Math.max(1, parseInt(document.getElementById('pcd-count').value) || 1));
+            const startAng = parseFloat(document.getElementById('pcd-start').value) || 0;
+            const customStep = parseFloat(document.getElementById('pcd-step').value);
+            const dir = parseInt(document.getElementById('pcd-dir').value, 10);
+
+            const radius = dia / 2;
+            const stepDeg = !isNaN(customStep) ? customStep : (360 / count);
+
+            document.getElementById('pcd-step-info').innerText = `Pas : ${(stepDeg * dir).toFixed(3)}°`;
+            document.getElementById('pcd-rad-display').innerText = radius.toFixed(3);
+
+            const tbody = document.getElementById('pcd-table-body');
+            tbody.innerHTML = '';
+            pcdCoordsCache = [];
+
+            let svgContent = `
+                <!-- Axes X / Y -->
+                <line x1="-130" y1="0" x2="130" y2="0" stroke="#334155" stroke-width="1" stroke-dasharray="4 4"/>
+                <line x1="0" y1="-130" x2="0" y2="130" stroke="#334155" stroke-width="1" stroke-dasharray="4 4"/>
+                <text x="115" y="-5" fill="#64748b" font-size="10" font-family="monospace">+X</text>
+                <text x="5" y="-118" fill="#64748b" font-size="10" font-family="monospace">+Y</text>
+                <!-- Cercle PCD -->
+                <circle cx="0" cy="0" r="95" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6 3"/>
+                <circle cx="0" cy="0" r="3" fill="#f97316"/>
+            `;
+
+            for (let i = 0; i < count; i++) {
+                const angDeg = startAng + i * stepDeg * dir;
+                const angRad = (angDeg * Math.PI) / 180;
+                const x = x0 + radius * Math.cos(angRad);
+                const y = y0 + radius * Math.sin(angRad);
+
+                pcdCoordsCache.push({ num: i + 1, ang: angDeg, x, y });
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-800/70 transition';
+                tr.innerHTML = `
+                    <td class="py-1.5 px-3 font-bold text-slate-400">${i + 1}</td>
+                    <td class="py-1.5 px-3 text-slate-300">${angDeg.toFixed(2)}°</td>
+                    <td class="py-1.5 px-3 font-bold text-sky-400">${x.toFixed(3)}</td>
+                    <td class="py-1.5 px-3 font-bold text-atelier-orange">${y.toFixed(3)}</td>
+                `;
+                tbody.appendChild(tr);
+
+                // Coordonnées SVG (Y inversé en SVG)
+                const sx = 95 * Math.cos(angRad);
+                const sy = -95 * Math.sin(angRad);
+                const lx = 114 * Math.cos(angRad);
+                const ly = -114 * Math.sin(angRad);
+
+                const isFirst = i === 0;
+                svgContent += `
+                    <circle cx="${sx.toFixed(2)}" cy="${sy.toFixed(2)}" r="${isFirst ? 6 : 4.5}" fill="${isFirst ? '#f97316' : '#0f131a'}" stroke="${isFirst ? '#fff' : '#38bdf8'}" stroke-width="2"/>
+                    ${count <= 24 ? `<text x="${lx.toFixed(2)}" y="${(ly + 3).toFixed(2)}" text-anchor="middle" fill="${isFirst ? '#f97316' : '#cbd5e1'}" font-size="9" font-family="monospace" font-weight="bold">${i + 1}</text>` : ''}
+                `;
+            }
+
+            document.getElementById('pcd-svg').innerHTML = svgContent;
+        }
+
+        function copyPcdGcode() {
+            if (!pcdCoordsCache.length) return;
+            const lines = pcdCoordsCache.map(pt => `X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)}`);
+            copyText(lines.join('\n'));
+        }
+
+        function calcPcdInverse() {
+            const x0 = parseFloat(document.getElementById('inv-x0').value) || 0;
+            const y0 = parseFloat(document.getElementById('inv-y0').value) || 0;
+            const x = parseFloat(document.getElementById('inv-x').value) || 0;
+            const y = parseFloat(document.getElementById('inv-y').value) || 0;
+            const pcdTheo = parseFloat(document.getElementById('inv-pcd').value) || 0;
+            const targetAng = parseFloat(document.getElementById('inv-target-ang').value) || 0;
+
+            const dx = x - x0;
+            const dy = y - y0;
+
+            const realRad = Math.hypot(dx, dy);
+            const realPcd = realRad * 2;
+
+            let angDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+            if (angDeg < 0) angDeg += 360;
+
+            // Conversion Degrés Minutes Secondes
+            const d = Math.floor(angDeg);
+            const mFloat = (angDeg - d) * 60;
+            const m = Math.floor(mFloat);
+            const s = ((mFloat - m) * 60).toFixed(1);
+
+            // Écart angulaire normalisé [-180, +180]
+            let diffAng = angDeg - (targetAng % 360);
+            if (diffAng > 180) diffAng -= 360;
+            if (diffAng < -180) diffAng += 360;
+
+            const diffRad = realRad - (pcdTheo / 2);
+            const arcDiff = (diffAng * Math.PI / 180) * (pcdTheo / 2);
+
+            document.getElementById('res-inv-angle').innerText = `${angDeg.toFixed(3)}°`;
+            document.getElementById('res-inv-dms').innerText = `${d}° ${String(m).padStart(2, '0')}' ${String(s).padStart(4, '0')}"`;
+
+            const signAng = diffAng >= 0 ? '+' : '';
+            document.getElementById('res-inv-diff-ang').innerText = `${signAng}${diffAng.toFixed(3)}°`;
+            document.getElementById('res-inv-arc').innerText = `Décalage arc : ${arcDiff >= 0 ? '+' : ''}${arcDiff.toFixed(3)} mm`;
+
+            document.getElementById('res-inv-pcd').innerText = `Ø ${realPcd.toFixed(3)} mm`;
+            document.getElementById('res-inv-rad').innerText = realRad.toFixed(3);
+
+            const signRad = diffRad >= 0 ? '+' : '';
+            document.getElementById('res-inv-diff-rad').innerText = `${signRad}${diffRad.toFixed(3)} mm`;
+        }
+
+        // --- 5. CONTRÔLE DE LOCALISATION (PALPAGE) ---
+        function toggleLocMode() {
+            const mode = document.getElementById('loc-theo-mode').value;
+            if (mode === 'polar') {
+                document.getElementById('loc-mode-polar').classList.remove('hidden');
+                document.getElementById('loc-mode-polar').classList.add('grid');
+                document.getElementById('loc-mode-cart').classList.add('hidden');
+                document.getElementById('loc-mode-cart').classList.remove('grid');
+            } else {
+                document.getElementById('loc-mode-polar').classList.add('hidden');
+                document.getElementById('loc-mode-polar').classList.remove('grid');
+                document.getElementById('loc-mode-cart').classList.remove('hidden');
+                document.getElementById('loc-mode-cart').classList.add('grid');
+            }
+            calcLocalisation();
+        }
+
+        function calcLocalisation() {
+            const xref = parseFloat(document.getElementById('loc-xref').value) || 0;
+            const yref = parseFloat(document.getElementById('loc-yref').value) || 0;
+            const mode = document.getElementById('loc-theo-mode').value;
+
+            let xRelTh = 0, yRelTh = 0;
+            if (mode === 'polar') {
+                const pcd = parseFloat(document.getElementById('loc-pcd').value) || 0;
+                const ang = parseFloat(document.getElementById('loc-ang').value) || 0;
+                const rad = (ang * Math.PI) / 180;
+                xRelTh = (pcd / 2) * Math.cos(rad);
+                yRelTh = (pcd / 2) * Math.sin(rad);
+            } else {
+                xRelTh = parseFloat(document.getElementById('loc-xth').value) || 0;
+                yRelTh = parseFloat(document.getElementById('loc-yth').value) || 0;
+            }
+
+            // Position théorique absolue dans le repère machine
+            const xAbsTh = xref + xRelTh;
+            const yAbsTh = yref + yRelTh;
+
+            const xMes = parseFloat(document.getElementById('loc-xmes').value) || 0;
+            const yMes = parseFloat(document.getElementById('loc-ymes').value) || 0;
+            const tol = Math.max(0.0001, parseFloat(document.getElementById('loc-tol').value) || 0.06);
+
+            const dx = xMes - xAbsTh;
+            const dy = yMes - yAbsTh;
+            const dr = Math.hypot(dx, dy);
+            const locDefect = 2 * dr;
+            const margin = tol - locDefect;
+            const isOk = locDefect <= tol;
+
+            document.getElementById('loc-abs-xth').innerText = xAbsTh.toFixed(3);
+            document.getElementById('loc-abs-yth').innerText = yAbsTh.toFixed(3);
+            document.getElementById('loc-dx').innerText = `${dx >= 0 ? '+' : ''}${dx.toFixed(3)} mm`;
+            document.getElementById('loc-dy').innerText = `${dy >= 0 ? '+' : ''}${dy.toFixed(3)} mm`;
+            document.getElementById('loc-dr').innerText = `${dr.toFixed(3)} mm`;
+            document.getElementById('loc-result-val').innerText = `Ø ${locDefect.toFixed(3)} mm`;
+            document.getElementById('loc-svg-tol-lbl').innerText = tol.toFixed(3);
+
+            const vBox = document.getElementById('loc-verdict-box');
+            const vText = document.getElementById('loc-verdict-text');
+            const mText = document.getElementById('loc-margin-val');
+
+            if (isOk) {
+                vBox.className = 'rounded-xl p-4 border-2 border-emerald-500 bg-emerald-500/15 flex items-center justify-between transition-all';
+                vText.className = 'text-2xl sm:text-3xl font-extrabold text-emerald-400 tracking-tight';
+                vText.innerText = 'CONFORME';
+                mText.className = 'text-xs font-bold text-emerald-300';
+                mText.innerText = `Marge : +${margin.toFixed(3)} mm`;
+            } else {
+                vBox.className = 'rounded-xl p-4 border-2 border-red-500 bg-red-500/20 flex items-center justify-between transition-all';
+                vText.className = 'text-2xl sm:text-3xl font-extrabold text-red-400 tracking-tight';
+                vText.innerText = 'HORS TOLÉRANCE';
+                mText.className = 'text-xs font-bold text-red-300';
+                mText.innerText = `Dépassement : ${margin.toFixed(3)} mm`;
+            }
+
+            // Rendu Cible SVG (Rayon tolérance fixé à 70px)
+            const tolPx = 70;
+            const tolRadius = tol / 2;
+            const scale = tolRadius > 0 ? (tolPx / tolRadius) : 1;
+            let ptX = dx * scale;
+            let ptY = -dy * scale; // Y inversé en SVG
+
+            // Limiter l'affichage du point dans la vue si très loin hors tolérance
+            const distPx = Math.hypot(ptX, ptY);
+            if (distPx > 98) {
+                ptX = (ptX / distPx) * 98;
+                ptY = (ptY / distPx) * 98;
+            }
+
+            const ptColor = isOk ? '#34d399' : '#f87171';
+            document.getElementById('loc-svg').innerHTML = `
+                <!-- Réticule -->
+                <line x1="-100" y1="0" x2="100" y2="0" stroke="#334155" stroke-width="1"/>
+                <line x1="0" y1="-100" x2="0" y2="100" stroke="#334155" stroke-width="1"/>
+                <!-- Zone de tolérance admissible -->
+                <circle cx="0" cy="0" r="${tolPx}" fill="rgba(52, 211, 153, 0.08)" stroke="#34d399" stroke-width="2" stroke-dasharray="5 3"/>
+                <circle cx="0" cy="0" r="${tolPx / 2}" fill="none" stroke="#334155" stroke-width="1" stroke-dasharray="2 2"/>
+                <!-- Vecteur écart -->
+                <line x1="0" y1="0" x2="${ptX.toFixed(1)}" y2="${ptY.toFixed(1)}" stroke="${ptColor}" stroke-width="2"/>
+                <!-- Point palpé -->
+                <circle cx="${ptX.toFixed(1)}" cy="${ptY.toFixed(1)}" r="5.5" fill="${ptColor}" stroke="#0f131a" stroke-width="1.5"/>
+            `;
+        }
+
+        // --- 6. TRIGONOMÉTRIE & CHANFREINAGE ---
+        let trigoHistory = [];
+
+        function resetTrigo() {
+            ['tri-ang', 'tri-hyp', 'tri-opp', 'tri-adj'].forEach(id => document.getElementById(id).value = '');
+            trigoHistory = [];
+            document.getElementById('tri-beta').innerText = '—';
+            document.getElementById('tri-area').innerText = '—';
+        }
+
+        function handleTrigoInput(field) {
+            const val = parseFloat(document.getElementById('tri-' + field).value);
+            if (isNaN(val) || val <= 0) {
+                trigoHistory = trigoHistory.filter(f => f !== field);
+                return;
+            }
+
+            if (!trigoHistory.includes(field)) {
+                trigoHistory.push(field);
+                if (trigoHistory.length > 2) {
+                    const oldest = trigoHistory.shift();
+                    document.getElementById('tri-' + oldest).value = '';
+                }
+            }
+
+            if (trigoHistory.length === 2) {
+                solveTrigo();
+            }
+        }
+
+        function solveTrigo() {
+            const f1 = trigoHistory[0];
+            const f2 = trigoHistory[1];
+            const v1 = parseFloat(document.getElementById('tri-' + f1).value);
+            const v2 = parseFloat(document.getElementById('tri-' + f2).value);
+
+            const vals = { [f1]: v1, [f2]: v2 };
+            let ang = vals.ang, hyp = vals.hyp, opp = vals.opp, adj = vals.adj;
+
+            try {
+                if (ang !== undefined) {
+                    if (ang >= 90) return;
+                    const rad = (ang * Math.PI) / 180;
+                    if (hyp !== undefined) {
+                        opp = hyp * Math.sin(rad);
+                        adj = hyp * Math.cos(rad);
+                    } else if (opp !== undefined) {
+                        hyp = opp / Math.sin(rad);
+                        adj = opp / Math.tan(rad);
+                    } else if (adj !== undefined) {
+                        hyp = adj / Math.cos(rad);
+                        opp = adj * Math.tan(rad);
+                    }
+                } else if (hyp !== undefined && opp !== undefined) {
+                    if (opp >= hyp) return;
+                    adj = Math.sqrt(hyp * hyp - opp * opp);
+                    ang = (Math.asin(opp / hyp) * 180) / Math.PI;
+                } else if (hyp !== undefined && adj !== undefined) {
+                    if (adj >= hyp) return;
+                    opp = Math.sqrt(hyp * hyp - adj * adj);
+                    ang = (Math.acos(adj / hyp) * 180) / Math.PI;
+                } else if (opp !== undefined && adj !== undefined) {
+                    hyp = Math.hypot(opp, adj);
+                    ang = (Math.atan2(opp, adj) * 180) / Math.PI;
+                }
+
+                if (!trigoHistory.includes('ang')) document.getElementById('tri-ang').value = ang.toFixed(3);
+                if (!trigoHistory.includes('hyp')) document.getElementById('tri-hyp').value = hyp.toFixed(3);
+                if (!trigoHistory.includes('opp')) document.getElementById('tri-opp').value = opp.toFixed(3);
+                if (!trigoHistory.includes('adj')) document.getElementById('tri-adj').value = adj.toFixed(3);
+
+                document.getElementById('tri-beta').innerText = `${(90 - ang).toFixed(3)}°`;
+                document.getElementById('tri-area').innerText = `${((opp * adj) / 2).toFixed(2)} mm²`;
+            } catch (e) {
+                // Ignorer erreurs intermédiaires de saisie
+            }
+        }
+
+        function calcChanfrein() {
+            const totalAngle = parseFloat(document.getElementById('ch-angle').value) || 90;
+            const tipDia = parseFloat(document.getElementById('ch-tip').value) || 0;
+            const width = parseFloat(document.getElementById('ch-width').value) || 0;
+            const offset = parseFloat(document.getElementById('ch-offset').value) || 0;
+
+            const halfAngleRad = ((totalAngle / 2) * Math.PI) / 180;
+            // Hauteur conique due au plat de pointe : (tipDia / 2) / tan(halfAngle)
+            const tipZ = (tipDia / 2) / Math.tan(halfAngleRad);
+            // Descente supplémentaire pour obtenir la largeur radiale C : C / tan(halfAngle)
+            const cutZ = width / Math.tan(halfAngleRad);
+
+            // Si l'outil est décalé radialement de "offset", on descend d'autant plus pour engager la partie conique
+            const offsetZ = offset / Math.tan(halfAngleRad);
+
+            // En programmation CNC classique (profil contour avec rayon outil = tipDia/2 + offset) :
+            // La pointe virtuelle descend de cutZ + offsetZ
+            const zProg = -(cutZ + offsetZ);
+            const dEff = tipDia + 2 * (offset + width);
+
+            document.getElementById('res-ch-z').innerText = zProg.toFixed(3);
+            document.getElementById('res-ch-deff').innerText = dEff.toFixed(2);
+        }
+
+        // =========================================================================
+        // 7. RELEVÉ MULTI-TROUS (TRIDI / MMT) & ARCHIVES LOCALES
+        // =========================================================================
+        const MMT_STORAGE_KEY = 'cnc_atelier_pro_mmt_archives_v1';
+        let mmtCurrentRows = [];
+        let mmtHoveredHole = null;
+
+        function initMmtModule() {
+            const dateInput = document.getElementById('mmt-date');
+            if (dateInput && !dateInput.value) {
+                dateInput.value = new Date().toISOString().split('T')[0];
+            }
+            generateMmtGrid();
+            renderMmtArchives();
+
+            // Gestion du survol sur le canvas Tridi pour afficher l'info-bulle d'un trou
+            const canvas = document.getElementById('mmt-canvas');
+            if (canvas) {
+                canvas.addEventListener('mousemove', handleMmtCanvasHover);
+                canvas.addEventListener('mouseleave', () => {
+                    mmtHoveredHole = null;
+                    drawMmtCanvas();
+                });
+            }
+            window.addEventListener('resize', () => {
+                if (!document.getElementById('panel-mmt').classList.contains('hidden')) {
+                    drawMmtCanvas();
+                }
+            });
+        }
+
+        function generateMmtGrid(prefilledMeasurements = null) {
+            const x0 = parseFloat(document.getElementById('mmt-x0').value) || 0;
+            const y0 = parseFloat(document.getElementById('mmt-y0').value) || 0;
+            const pcd = parseFloat(document.getElementById('mmt-pcd').value) || 250;
+            const count = Math.min(72, Math.max(1, parseInt(document.getElementById('mmt-count').value, 10) || 10));
+            const startAng = parseFloat(document.getElementById('mmt-start').value) || 0;
+
+            const radius = pcd / 2;
+            const stepDeg = 360 / count;
+            const tbody = document.getElementById('mmt-table-body');
+            tbody.innerHTML = '';
+            mmtCurrentRows = [];
+
+            for (let i = 0; i < count; i++) {
+                const angDeg = (startAng + i * stepDeg) % 360;
+                const normAng = angDeg < 0 ? angDeg + 360 : angDeg;
+                const rad = (normAng * Math.PI) / 180;
+                const xTh = x0 + radius * Math.cos(rad);
+                const yTh = y0 + radius * Math.sin(rad);
+
+                const preX = prefilledMeasurements && prefilledMeasurements[i] && prefilledMeasurements[i].xMes !== null ? prefilledMeasurements[i].xMes : '';
+                const preY = prefilledMeasurements && prefilledMeasurements[i] && prefilledMeasurements[i].yMes !== null ? prefilledMeasurements[i].yMes : '';
+
+                mmtCurrentRows.push({
+                    index: i,
+                    label: `T${i + 1}`,
+                    angTh: normAng,
+                    xTh,
+                    yTh,
+                    xMes: preX !== '' ? parseFloat(preX) : null,
+                    yMes: preY !== '' ? parseFloat(preY) : null,
+                    dx: null,
+                    dy: null,
+                    dr: null,
+                    dAng: null,
+                    loc: null,
+                    isOk: null
+                });
+
+                const tr = document.createElement('tr');
+                tr.id = `mmt-row-${i}`;
+                tr.className = 'hover:bg-slate-800/60 transition';
+                tr.innerHTML = `
+                    <td class="py-1.5 px-2 font-bold text-white">T${i + 1} <span class="text-[10px] text-slate-500">(${normAng.toFixed(0)}°)</span></td>
+                    <td class="py-1.5 px-2 text-slate-400">${xTh.toFixed(3)}</td>
+                    <td class="py-1.5 px-2 text-slate-400">${yTh.toFixed(3)}</td>
+                    <td class="py-1 px-1.5">
+                        <input type="number" id="mmt-in-x-${i}" value="${preX}" placeholder="${xTh.toFixed(3)}" step="0.001"
+                            oninput="onMmtCellInput(${i})" onkeydown="handleMmtKeyNav(event, ${i}, 'x')"
+                            class="w-24 bg-atelier-panel border border-atelier-border focus:border-sky-400 rounded px-2 py-1 text-sky-300 font-bold outline-none">
+                    </td>
+                    <td class="py-1 px-1.5">
+                        <input type="number" id="mmt-in-y-${i}" value="${preY}" placeholder="${yTh.toFixed(3)}" step="0.001"
+                            oninput="onMmtCellInput(${i})" onkeydown="handleMmtKeyNav(event, ${i}, 'y')"
+                            class="w-24 bg-atelier-panel border border-atelier-border focus:border-atelier-orange rounded px-2 py-1 text-amber-300 font-bold outline-none">
+                    </td>
+                    <td id="mmt-cell-dr-${i}" class="py-1.5 px-2 text-slate-400">—</td>
+                    <td id="mmt-cell-dang-${i}" class="py-1.5 px-2 text-slate-400">—</td>
+                    <td id="mmt-cell-loc-${i}" class="py-1.5 px-2 font-bold text-slate-300">—</td>
+                    <td id="mmt-cell-stat-${i}" class="py-1.5 px-2 text-center"><span class="text-slate-600">—</span></td>
+                `;
+                tbody.appendChild(tr);
+            }
+
+            recalcMmtRows();
+        }
+
+        // Navigation rapide au clavier (Entrée passe de X à Y puis à la ligne suivante)
+        function handleMmtKeyNav(e, idx, axis) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (axis === 'x') {
+                    const yEl = document.getElementById(`mmt-in-y-${idx}`);
+                    if (yEl) { yEl.focus(); yEl.select(); }
+                } else {
+                    const nextX = document.getElementById(`mmt-in-x-${idx + 1}`);
+                    if (nextX) { nextX.focus(); nextX.select(); }
+                }
+            }
+        }
+
+        function onMmtCellInput(idx) {
+            const xValStr = document.getElementById(`mmt-in-x-${idx}`).value;
+            const yValStr = document.getElementById(`mmt-in-y-${idx}`).value;
+            mmtCurrentRows[idx].xMes = xValStr !== '' ? parseFloat(xValStr) : null;
+            mmtCurrentRows[idx].yMes = yValStr !== '' ? parseFloat(yValStr) : null;
+            recalcMmtRows();
+        }
+
+        function recalcMmtRows() {
+            const x0 = parseFloat(document.getElementById('mmt-x0').value) || 0;
+            const y0 = parseFloat(document.getElementById('mmt-y0').value) || 0;
+            const pcd = parseFloat(document.getElementById('mmt-pcd').value) || 250;
+            const tol = Math.max(0.0001, parseFloat(document.getElementById('mmt-tol').value) || 0.06);
+            const rTh = pcd / 2;
+
+            let measuredCount = 0;
+            let maxLoc = -1;
+            let maxHoleLabel = '—';
+            let sumLoc = 0;
+            let sumDx = 0;
+            let sumDy = 0;
+            let anyOutOfTol = false;
+
+            mmtCurrentRows.forEach((row, i) => {
+                const drEl = document.getElementById(`mmt-cell-dr-${i}`);
+                const dangEl = document.getElementById(`mmt-cell-dang-${i}`);
+                const locEl = document.getElementById(`mmt-cell-loc-${i}`);
+                const statEl = document.getElementById(`mmt-cell-stat-${i}`);
+
+                if (row.xMes !== null && !isNaN(row.xMes) && row.yMes !== null && !isNaN(row.yMes)) {
+                    const dx = row.xMes - row.xTh;
+                    const dy = row.yMes - row.yTh;
+                    const rMes = Math.hypot(row.xMes - x0, row.yMes - y0);
+                    const dr = rMes - rTh;
+
+                    let angMes = (Math.atan2(row.yMes - y0, row.xMes - x0) * 180) / Math.PI;
+                    if (angMes < 0) angMes += 360;
+                    let dAng = angMes - row.angTh;
+                    if (dAng > 180) dAng -= 360;
+                    if (dAng < -180) dAng += 360;
+
+                    const loc = 2 * Math.hypot(dx, dy);
+                    const isOk = loc <= tol;
+
+                    row.dx = dx;
+                    row.dy = dy;
+                    row.dr = dr;
+                    row.dAng = dAng;
+                    row.loc = loc;
+                    row.isOk = isOk;
+
+                    measuredCount++;
+                    sumLoc += loc;
+                    sumDx += dx;
+                    sumDy += dy;
+                    if (!isOk) anyOutOfTol = true;
+                    if (loc > maxLoc) {
+                        maxLoc = loc;
+                        maxHoleLabel = `${row.label} (Ø ${loc.toFixed(3)})`;
+                    }
+
+                    drEl.innerText = `${dr >= 0 ? '+' : ''}${dr.toFixed(3)}`;
+                    drEl.className = 'py-1.5 px-2 text-slate-200';
+
+                    dangEl.innerText = `${dAng >= 0 ? '+' : ''}${dAng.toFixed(3)}°`;
+                    dangEl.className = 'py-1.5 px-2 text-slate-200';
+
+                    locEl.innerText = `Ø ${loc.toFixed(3)}`;
+                    locEl.className = `py-1.5 px-2 font-extrabold ${isOk ? 'text-emerald-400' : 'text-red-400'}`;
+
+                    statEl.innerHTML = isOk
+                        ? `<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold">OK</span>`
+                        : `<span class="px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40 text-[10px] font-bold">HORS TOL</span>`;
+                } else {
+                    row.dx = row.dy = row.dr = row.dAng = row.loc = row.isOk = null;
+                    drEl.innerText = '—';
+                    dangEl.innerText = '—';
+                    locEl.innerText = '—';
+                    locEl.className = 'py-1.5 px-2 font-bold text-slate-500';
+                    statEl.innerHTML = `<span class="text-slate-600">—</span>`;
+                }
+            });
+
+            // Mise à jour du bandeau de synthèse
+            const vCard = document.getElementById('mmt-verdict-card');
+            const vStatus = document.getElementById('mmt-global-status');
+            document.getElementById('mmt-measured-count').innerText = `${measuredCount} / ${mmtCurrentRows.length} trous saisis`;
+
+            if (measuredCount === 0) {
+                vCard.className = 'col-span-2 lg:col-span-1 bg-atelier-panel border-2 border-slate-600 rounded-xl p-3.5 flex flex-col justify-center';
+                vStatus.className = 'text-xl font-extrabold text-slate-300 mt-0.5';
+                vStatus.innerText = 'EN ATTENTE';
+                document.getElementById('mmt-max-loc').innerText = '—';
+                document.getElementById('mmt-max-hole').innerText = 'Trou : —';
+                document.getElementById('mmt-avg-loc').innerText = '—';
+                document.getElementById('mmt-bary-dx').innerText = '0.000';
+                document.getElementById('mmt-bary-dy').innerText = '0.000';
+                document.getElementById('mmt-bary-diag').innerText = 'Aucune mesure';
+            } else {
+                const avgLoc = sumLoc / measuredCount;
+                const baryDx = sumDx / measuredCount;
+                const baryDy = sumDy / measuredCount;
+
+                if (!anyOutOfTol) {
+                    vCard.className = 'col-span-2 lg:col-span-1 bg-emerald-500/15 border-2 border-emerald-500 rounded-xl p-3.5 flex flex-col justify-center';
+                    vStatus.className = 'text-xl font-extrabold text-emerald-400 mt-0.5';
+                    vStatus.innerText = 'CONFORME';
+                } else {
+                    vCard.className = 'col-span-2 lg:col-span-1 bg-red-500/20 border-2 border-red-500 rounded-xl p-3.5 flex flex-col justify-center';
+                    vStatus.className = 'text-xl font-extrabold text-red-400 mt-0.5';
+                    vStatus.innerText = 'NON CONFORME';
+                }
+
+                document.getElementById('mmt-max-loc').innerText = `Ø ${maxLoc.toFixed(3)}`;
+                document.getElementById('mmt-max-loc').className = `text-2xl font-mono font-extrabold mt-0.5 ${anyOutOfTol ? 'text-red-400' : 'text-emerald-400'}`;
+                document.getElementById('mmt-max-hole').innerText = `Max sur ${maxHoleLabel}`;
+                document.getElementById('mmt-avg-loc').innerText = `Ø ${avgLoc.toFixed(3)}`;
+
+                document.getElementById('mmt-bary-dx').innerText = `${baryDx >= 0 ? '+' : ''}${baryDx.toFixed(3)} mm`;
+                document.getElementById('mmt-bary-dy').innerText = `${baryDy >= 0 ? '+' : ''}${baryDy.toFixed(3)} mm`;
+                const shiftMag = Math.hypot(baryDx, baryDy);
+                document.getElementById('mmt-bary-diag').innerText = shiftMag > (tol * 0.25)
+                    ? `Décalage G54 détecté (${shiftMag.toFixed(3)} mm)`
+                    : `Centrage pièce bon (${shiftMag.toFixed(3)} mm)`;
+            }
+
+            drawMmtCanvas();
+        }
+
+        // Simulation réaliste d'un relevé (léger décalage d'origine + dispersion aléatoire)
+        function simulateMmtData() {
+            if (!document.getElementById('mmt-of').value) {
+                document.getElementById('mmt-of').value = 'OF-2026-1042';
+            }
+            if (!document.getElementById('mmt-plan').value) {
+                document.getElementById('mmt-plan').value = 'PL-BRIDE-250-A';
+            }
+            const tol = parseFloat(document.getElementById('mmt-tol').value) || 0.06;
+            const sysShiftX = (Math.random() - 0.5) * (tol * 0.45);
+            const sysShiftY = (Math.random() - 0.5) * (tol * 0.45);
+
+            mmtCurrentRows.forEach((row, i) => {
+                // Créer 1 trou légèrement limite ou hors tolérance pour démonstration visuelle
+                const factor = (i === 2) ? 0.65 : 0.35;
+                const noiseX = (Math.random() - 0.5) * tol * factor;
+                const noiseY = (Math.random() - 0.5) * tol * factor;
+                const xSim = (row.xTh + sysShiftX + noiseX).toFixed(3);
+                const ySim = (row.yTh + sysShiftY + noiseY).toFixed(3);
+
+                document.getElementById(`mmt-in-x-${i}`).value = xSim;
+                document.getElementById(`mmt-in-y-${i}`).value = ySim;
+                row.xMes = parseFloat(xSim);
+                row.yMes = parseFloat(ySim);
+            });
+
+            recalcMmtRows();
+            showToast('Relevé simulé généré');
+        }
+
+        function clearMmtMeasured() {
+            mmtCurrentRows.forEach((row, i) => {
+                document.getElementById(`mmt-in-x-${i}`).value = '';
+                document.getElementById(`mmt-in-y-${i}`).value = '';
+                row.xMes = null;
+                row.yMes = null;
+            });
+            recalcMmtRows();
+            showToast('Mesures effacées');
+        }
+
+        // --- RENDU GRAPHIQUE CANVAS TYPE MMT / TRIDI ---
+        let mmtCanvasPointsCache = [];
+
+        function drawMmtCanvas() {
+            const canvas = document.getElementById('mmt-canvas');
+            const wrapper = document.getElementById('mmt-canvas-wrapper');
+            if (!canvas || !wrapper) return;
+
+            const rect = wrapper.getBoundingClientRect();
+            const size = Math.max(260, Math.floor(rect.width));
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = size * dpr;
+            canvas.height = size * dpr;
+            canvas.style.width = `${size}px`;
+            canvas.style.height = `${size}px`;
+
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+
+            const cx = size / 2;
+            const cy = size / 2;
+            const pcd = parseFloat(document.getElementById('mmt-pcd').value) || 250;
+            const tol = Math.max(0.0001, parseFloat(document.getElementById('mmt-tol').value) || 0.06);
+            const amp = parseFloat(document.getElementById('mmt-amp').value) || 250;
+            const showBary = document.getElementById('mmt-show-bary').checked;
+
+            // Fond grille technique
+            ctx.fillStyle = '#0f131a';
+            ctx.fillRect(0, 0, size, size);
+
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            const gridStep = size / 8;
+            for (let g = gridStep; g < size; g += gridStep) {
+                ctx.beginPath(); ctx.moveTo(g, 0); ctx.lineTo(g, size); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, g); ctx.lineTo(size, g); ctx.stroke();
+            }
+
+            // Axes centraux
+            ctx.strokeStyle = '#334155';
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath(); ctx.moveTo(cx, 12); ctx.lineTo(cx, size - 12); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(12, cy); ctx.lineTo(size - 12, cy); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Rayon d'affichage du PCD théorique sur le canvas
+            const visualPcdRadius = size * 0.34;
+            const mmToPxBase = pcd > 0 ? (visualPcdRadius / (pcd / 2)) : 1;
+
+            // Cercle PCD théorique en pointillés
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.arc(cx, cy, visualPcdRadius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Rayon visuel de la zone de tolérance amplifiée
+            const tolRadiusPx = Math.min(size * 0.14, Math.max(6, (tol / 2) * mmToPxBase * amp));
+
+            mmtCanvasPointsCache = [];
+            let sumDx = 0, sumDy = 0, countMes = 0;
+
+            mmtCurrentRows.forEach((row) => {
+                const rad = (row.angTh * Math.PI) / 180;
+                const tx = cx + visualPcdRadius * Math.cos(rad);
+                const ty = cy - visualPcdRadius * Math.sin(rad); // Y inversé sur écran
+
+                // Cercle de zone de tolérance IT autour du point théorique
+                ctx.strokeStyle = 'rgba(100, 116, 139, 0.45)';
+                ctx.fillStyle = 'rgba(148, 163, 184, 0.05)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(tx, ty, tolRadiusPx, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Croix théorique
+                ctx.strokeStyle = '#64748b';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(tx - 4, ty); ctx.lineTo(tx + 4, ty);
+                ctx.moveTo(tx, ty - 4); ctx.lineTo(tx, ty + 4);
+                ctx.stroke();
+
+                // Libellé T1..Tn à l'extérieur
+                const lx = cx + (visualPcdRadius + tolRadiusPx + 13) * Math.cos(rad);
+                const ly = cy - (visualPcdRadius + tolRadiusPx + 13) * Math.sin(rad);
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = 'bold 10px "JetBrains Mono", monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(row.label, lx, ly);
+
+                if (row.dx !== null && row.dy !== null) {
+                    sumDx += row.dx;
+                    sumDy += row.dy;
+                    countMes++;
+
+                    const mx = tx + row.dx * mmToPxBase * amp;
+                    const my = ty - row.dy * mmToPxBase * amp;
+                    const color = row.isOk ? '#34d399' : '#f87171';
+
+                    // Vecteur erreur (flèche du point théorique vers le point palpé)
+                    drawArrow(ctx, tx, ty, mx, my, color, 2);
+
+                    // Point palpé
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(mx, my, 4.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#0f131a';
+                    ctx.lineWidth = 1.2;
+                    ctx.stroke();
+
+                    mmtCanvasPointsCache.push({ row, mx, my, tx, ty });
+                }
+            });
+
+            // Affichage du barycentre (décalage moyen G54)
+            if (showBary && countMes > 0) {
+                const bDx = sumDx / countMes;
+                const bDy = sumDy / countMes;
+                const bx = cx + bDx * mmToPxBase * amp;
+                const by = cy - bDy * mmToPxBase * amp;
+
+                drawArrow(ctx, cx, cy, bx, by, '#fbbf24', 2.2);
+                ctx.fillStyle = '#fbbf24';
+                ctx.beginPath();
+                ctx.arc(bx, by, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Info-bulle si survol d'un point mesuré
+            if (mmtHoveredHole) {
+                const { row, mx, my } = mmtHoveredHole;
+                const boxW = 148;
+                const boxH = 52;
+                let bx = mx + 10;
+                let by = my - boxH - 8;
+                if (bx + boxW > size) bx = mx - boxW - 10;
+                if (by < 6) by = my + 12;
+
+                ctx.fillStyle = 'rgba(24, 30, 41, 0.95)';
+                ctx.strokeStyle = row.isOk ? '#34d399' : '#f87171';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.roundRect(bx, by, boxW, boxH, 6);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 11px "JetBrains Mono", monospace';
+                ctx.textAlign = 'left';
+                ctx.fillText(`${row.label} — Loc Ø ${row.loc.toFixed(3)}`, bx + 8, by + 16);
+                ctx.fillStyle = '#cbd5e1';
+                ctx.font = '10px "JetBrains Mono", monospace';
+                ctx.fillText(`ΔX:${row.dx >= 0 ? '+' : ''}${row.dx.toFixed(3)} ΔY:${row.dy >= 0 ? '+' : ''}${row.dy.toFixed(3)}`, bx + 8, by + 32);
+                ctx.fillText(`ΔR:${row.dr >= 0 ? '+' : ''}${row.dr.toFixed(3)} Δθ:${row.dAng >= 0 ? '+' : ''}${row.dAng.toFixed(2)}°`, bx + 8, by + 45);
+            }
+        }
+
+        function drawArrow(ctx, fromX, fromY, toX, toY, color, lineWidth) {
+            const dist = Math.hypot(toX - fromX, toY - fromY);
+            if (dist < 1) return;
+            const headLen = Math.min(8, dist * 0.45);
+            const angle = Math.atan2(toY - fromY, toX - fromX);
+
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = lineWidth;
+
+            ctx.beginPath();
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(toX, toY);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(toX, toY);
+            ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 6), toY - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI / 6), toY - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function handleMmtCanvasHover(e) {
+            const canvas = document.getElementById('mmt-canvas');
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            let found = null;
+            for (const pt of mmtCanvasPointsCache) {
+                if (Math.hypot(mouseX - pt.mx, mouseY - pt.my) <= 14) {
+                    found = pt;
+                    break;
+                }
+            }
+            if (found !== mmtHoveredHole) {
+                mmtHoveredHole = found;
+                drawMmtCanvas();
+            }
+        }
+
+        // --- SAUVEGARDE, ARCHIVES LOCALSTORAGE & EXPORT CSV / JSON ---
+        function getMmtArchives() {
+            try {
+                const raw = localStorage.getItem(MMT_STORAGE_KEY);
+                return raw ? JSON.parse(raw) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function setMmtArchives(list) {
+            localStorage.setItem(MMT_STORAGE_KEY, JSON.stringify(list));
+        }
+
+        function saveMmtRecord() {
+            const ofNum = document.getElementById('mmt-of').value.trim();
+            const planNum = document.getElementById('mmt-plan').value.trim();
+            const dateStr = document.getElementById('mmt-date').value || new Date().toISOString().split('T')[0];
+            const note = document.getElementById('mmt-note').value.trim();
+
+            if (!ofNum || !planNum) {
+                showToast('Renseignez le N° d\'OF et le N° de Plan !');
+                if (!ofNum) document.getElementById('mmt-of').focus();
+                else document.getElementById('mmt-plan').focus();
+                return;
+            }
+
+            const measuredRows = mmtCurrentRows.filter(r => r.loc !== null);
+            if (measuredRows.length === 0) {
+                showToast('Saisissez au moins 1 trou palpé avant d\'enregistrer.');
+                return;
+            }
+
+            const tol = parseFloat(document.getElementById('mmt-tol').value) || 0.06;
+            const maxLoc = Math.max(...measuredRows.map(r => r.loc));
+            const isOk = maxLoc <= tol;
+
+            const record = {
+                id: Date.now(),
+                ofNum,
+                planNum,
+                dateStr,
+                note,
+                x0: parseFloat(document.getElementById('mmt-x0').value) || 0,
+                y0: parseFloat(document.getElementById('mmt-y0').value) || 0,
+                pcd: parseFloat(document.getElementById('mmt-pcd').value) || 250,
+                count: mmtCurrentRows.length,
+                startAng: parseFloat(document.getElementById('mmt-start').value) || 0,
+                tol,
+                maxLoc,
+                isOk,
+                measuredCount: measuredRows.length,
+                rows: mmtCurrentRows.map(r => ({
+                    label: r.label,
+                    angTh: r.angTh,
+                    xTh: r.xTh,
+                    yTh: r.yTh,
+                    xMes: r.xMes,
+                    yMes: r.yMes,
+                    dr: r.dr,
+                    dAng: r.dAng,
+                    loc: r.loc,
+                    isOk: r.isOk
+                }))
+            };
+
+            const archives = getMmtArchives();
+            archives.unshift(record);
+            setMmtArchives(archives);
+            renderMmtArchives();
+            showToast(`Contrôle ${ofNum} archivé !`);
+        }
+
+        function renderMmtArchives() {
+            const tbody = document.getElementById('mmt-archives-body');
+            if (!tbody) return;
+            const filter = (document.getElementById('mmt-search').value || '').toLowerCase().trim();
+            const archives = getMmtArchives().filter(rec =>
+                rec.ofNum.toLowerCase().includes(filter) ||
+                rec.planNum.toLowerCase().includes(filter) ||
+                (rec.note && rec.note.toLowerCase().includes(filter))
+            );
+
+            tbody.innerHTML = '';
+            if (archives.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-500 font-sans">Aucun relevé archivé correspondant.</td></tr>`;
+                return;
+            }
+
+            archives.forEach(rec => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-800/70 transition';
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 text-slate-300">${rec.dateStr}</td>
+                    <td class="py-2.5 px-3 font-bold text-atelier-orange">${escapeHtml(rec.ofNum)}</td>
+                    <td class="py-2.5 px-3 font-bold text-sky-400">${escapeHtml(rec.planNum)}</td>
+                    <td class="py-2.5 px-3 text-slate-300">Ø${rec.pcd} (${rec.measuredCount}/${rec.count} trous)</td>
+                    <td class="py-2.5 px-3 font-bold ${rec.isOk ? 'text-emerald-400' : 'text-red-400'}">Ø ${rec.maxLoc.toFixed(3)} / ${rec.tol}</td>
+                    <td class="py-2.5 px-3">
+                        ${rec.isOk
+                            ? '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold">CONFORME</span>'
+                            : '<span class="px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40 text-[10px] font-bold">HORS TOL</span>'}
+                    </td>
+                    <td class="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
+                        <button onclick="loadMmtRecord(${rec.id})" class="px-2.5 py-1 rounded bg-sky-500/20 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/40 font-sans font-bold text-xs transition">
+                            Ouvrir
+                        </button>
+                        <button onclick="exportRecordCsv(${rec.id})" class="px-2.5 py-1 rounded bg-atelier-card hover:bg-slate-700 text-slate-200 border border-atelier-border font-sans font-semibold text-xs transition">
+                            CSV
+                        </button>
+                        <button onclick="deleteMmtRecord(${rec.id})" class="px-2 py-1 rounded bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 font-sans font-bold text-xs transition" title="Supprimer">
+                            ✕
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function loadMmtRecord(id) {
+            const rec = getMmtArchives().find(r => r.id === id);
+            if (!rec) return;
+
+            document.getElementById('mmt-of').value = rec.ofNum;
+            document.getElementById('mmt-plan').value = rec.planNum;
+            document.getElementById('mmt-date').value = rec.dateStr;
+            document.getElementById('mmt-note').value = rec.note || '';
+            document.getElementById('mmt-x0').value = rec.x0;
+            document.getElementById('mmt-y0').value = rec.y0;
+            document.getElementById('mmt-pcd').value = rec.pcd;
+            document.getElementById('mmt-count').value = rec.count;
+            document.getElementById('mmt-start').value = rec.startAng;
+            document.getElementById('mmt-tol').value = rec.tol;
+
+            generateMmtGrid(rec.rows);
+            showToast(`Relevé ${rec.ofNum} chargé`);
+            document.getElementById('panel-mmt').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function deleteMmtRecord(id) {
+            const updated = getMmtArchives().filter(r => r.id !== id);
+            setMmtArchives(updated);
+            renderMmtArchives();
+            showToast('Archive supprimée');
+        }
+
+        function buildCsvContent(meta, rows) {
+            const lines = [
+                `RAPPORT DE CONTROLE LOCALISATION PCD - CNC ATELIER PRO`,
+                `Numero OF;${meta.ofNum}`,
+                `Numero Plan;${meta.planNum}`,
+                `Date;${meta.dateStr}`,
+                `Operateur / Note;${meta.note || ''}`,
+                `PCD Theorique (mm);${meta.pcd}`,
+                `Tolerance Localisation IT (mm);${meta.tol}`,
+                ``,
+                `Trou;Angle Theo (deg);X Theo (mm);Y Theo (mm);X Palpe (mm);Y Palpe (mm);Ecart Radial dR (mm);Ecart Angulaire (deg);Localisation ISO (mm);Statut`
+            ];
+
+            rows.forEach(r => {
+                if (r.xMes !== null && r.yMes !== null && r.loc !== null) {
+                    lines.push([
+                        r.label,
+                        r.angTh.toFixed(3),
+                        r.xTh.toFixed(3),
+                        r.yTh.toFixed(3),
+                        r.xMes.toFixed(3),
+                        r.yMes.toFixed(3),
+                        r.dr.toFixed(3),
+                        r.dAng.toFixed(3),
+                        r.loc.toFixed(3),
+                        r.isOk ? 'CONFORME' : 'HORS TOLERANCE'
+                    ].join(';'));
+                } else {
+                    lines.push(`${r.label};${r.angTh.toFixed(3)};${r.xTh.toFixed(3)};${r.yTh.toFixed(3)};;;;;;NON MESURE`);
+                }
+            });
+            return '\uFEFF' + lines.join('\n'); // BOM UTF-8 pour ouverture directe dans Excel FR
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function exportCurrentMmtCsv() {
+            const meta = {
+                ofNum: document.getElementById('mmt-of').value.trim() || 'SANS-OF',
+                planNum: document.getElementById('mmt-plan').value.trim() || 'SANS-PLAN',
+                dateStr: document.getElementById('mmt-date').value || new Date().toISOString().split('T')[0],
+                note: document.getElementById('mmt-note').value.trim(),
+                pcd: document.getElementById('mmt-pcd').value,
+                tol: document.getElementById('mmt-tol').value
+            };
+            const csv = buildCsvContent(meta, mmtCurrentRows);
+            downloadFile(csv, `Controle_${meta.ofNum}_${meta.planNum}_${meta.dateStr}.csv`, 'text/csv;charset=utf-8;');
+            showToast('Fichier CSV exporté !');
+        }
+
+        function exportRecordCsv(id) {
+            const rec = getMmtArchives().find(r => r.id === id);
+            if (!rec) return;
+            const csv = buildCsvContent(rec, rec.rows);
+            downloadFile(csv, `Controle_${rec.ofNum}_${rec.planNum}_${rec.dateStr}.csv`, 'text/csv;charset=utf-8;');
+            showToast('Fichier CSV exporté !');
+        }
+
+        function exportAllArchivesJson() {
+            const archives = getMmtArchives();
+            if (archives.length === 0) {
+                showToast('Aucune archive à exporter.');
+                return;
+            }
+            const dateTag = new Date().toISOString().split('T')[0];
+            downloadFile(JSON.stringify(archives, null, 2), `Archives_CNC_Atelier_${dateTag}.json`, 'application/json');
+            showToast('Sauvegarde JSON téléchargée !');
+        }
+
+        function importArchivesJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (!Array.isArray(imported)) throw new Error('Format invalide');
+                    const current = getMmtArchives();
+                    const existingIds = new Set(current.map(c => c.id));
+                    let added = 0;
+                    imported.forEach(item => {
+                        if (item.ofNum && item.planNum && Array.isArray(item.rows) && !existingIds.has(item.id)) {
+                            current.push(item);
+                            added++;
+                        }
+                    });
+                    current.sort((a, b) => b.id - a.id);
+                    setMmtArchives(current);
+                    renderMmtArchives();
+                    showToast(`${added} archive(s) importée(s) !`);
+                } catch (err) {
+                    showToast('Erreur : fichier JSON invalide.');
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        }
+
+        // Initialisation de tous les calculs au chargement
+        window.onload = function () {
+            calcFraisage();
+            calcTournage();
+            calcISO();
+            calcPCD();
+            calcLocalisation();
+            calcChanfrein();
+            initMmtModule();
+        };
+    </script>
+</body>
+</html>
